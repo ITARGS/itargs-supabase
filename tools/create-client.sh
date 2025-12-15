@@ -30,6 +30,29 @@ JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')"
 DB_ENC_KEY="$(openssl rand -hex 16 | tr -d '\n')"
 
+# Generate JWT tokens for API access
+gen_jwt() {
+  local role="$1"
+  local secret="$2"
+  docker run --rm node:20-alpine node -e "
+    const crypto = require('crypto');
+    const header = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      iss:'supabase',
+      aud:'authenticated',
+      role:'$role',
+      iat:Math.floor(Date.now()/1000),
+      exp:Math.floor(Date.now()/1000)+315360000
+    })).toString('base64url');
+    const sig = crypto.createHmac('sha256','$secret').update(header+'.'+payload).digest('base64url');
+    console.log(header+'.'+payload+'.'+sig);
+  "
+}
+
+echo "Generating JWT keys..."
+ANON_KEY="$(gen_jwt anon "$JWT_SECRET")"
+SERVICE_ROLE_KEY="$(gen_jwt service_role "$JWT_SECRET")"
+
 cat > "$CLIENT_DIR/.env" <<EOF
 CLIENT=$CLIENT
 
@@ -38,6 +61,8 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 
 JWT_SECRET=$JWT_SECRET
+ANON_KEY=$ANON_KEY
+SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
 
 # URLs (required by auth)
 SITE_URL=https://$CLIENT.itargs.com
@@ -51,6 +76,62 @@ RLIMIT_NOFILE=1048576
 SECRET_KEY_BASE=$SECRET_KEY_BASE
 DB_ENC_KEY=$DB_ENC_KEY
 EOF
+
+# Create database initialization script
+cat > "$CLIENT_DIR/init.sql" <<'INITSQL'
+-- Create required roles for Supabase
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN NOINHERIT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN NOINHERIT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+  END IF;
+END
+$$;
+
+-- Grant postgres role to service roles
+GRANT anon TO postgres;
+GRANT authenticated TO postgres;
+GRANT service_role TO postgres;
+
+-- Create schemas
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION postgres;
+CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION postgres;
+CREATE SCHEMA IF NOT EXISTS realtime AUTHORIZATION postgres;
+
+-- Grant schema usage
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA realtime TO anon, authenticated, service_role;
+
+-- Grant table permissions on public schema
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Create schema_migrations table for PostgREST if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  version TEXT PRIMARY KEY
+);
+
+INITSQL
 
 cat > "$CLIENT_DIR/kong.yml" <<'EOF'
 _format_version: "2.1"
@@ -93,6 +174,7 @@ services:
     env_file: .env
     volumes:
       - ./data/db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks: [${CLIENT}_internal]
 
   auth:
@@ -138,11 +220,18 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+      ANON_KEY: \${ANON_KEY}
+      SERVICE_KEY: \${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
       PGRST_JWT_SECRET: \${JWT_SECRET}
+      DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: ${CLIENT}
     volumes:
       - ./data/storage:/var/lib/storage
-    depends_on: [db]
+    depends_on: [db, rest]
     networks: [${CLIENT}_internal]
 
   realtime:
@@ -164,6 +253,7 @@ services:
       DB_ENC_KEY: \${DB_ENC_KEY}
 
       # FIX: avoid conflict with public.schema_migrations
+      DB_MIGRATIONS_TABLE: realtime_schema_migrations
       ECTO_MIGRATIONS_TABLE: realtime_schema_migrations
 
       RLIMIT_NOFILE: \${RLIMIT_NOFILE}
