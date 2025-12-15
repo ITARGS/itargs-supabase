@@ -4,13 +4,8 @@ set -euo pipefail
 # Usage:
 #   ./tools/delete-client.sh <clientname> [--purge]
 #
-# --purge does:
-#   - docker compose down -v (deletes volumes)
-#   - removes the clients/<client> folder
-#
-# Without --purge:
-#   - docker compose down (keeps volumes)
-#   - keeps the folder (so you can re-run later)
+# Without --purge: stops stack, keeps volumes + folder
+# With --purge:    stops stack, deletes volumes + folder
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${1:-}"
@@ -34,45 +29,40 @@ if [[ ! -d "${CLIENT_DIR}" ]]; then
   exit 1
 fi
 
-# Stop stack
-echo "Stopping stack for client: ${CLIENT}"
+echo "Stopping client stack: ${CLIENT}"
 if [[ "${MODE}" == "--purge" ]]; then
   ( cd "${CLIENT_DIR}" && docker compose down -v )
 else
   ( cd "${CLIENT_DIR}" && docker compose down )
 fi
 
-# Remove Caddyfile block safely:
-# We delete from the line that starts with "api.<client>.itargs.com {" until the matching "}" line.
+# Remove Caddyfile block by markers
+BEGIN="# BEGIN CLIENT ${CLIENT}"
+END="# END CLIENT ${CLIENT}"
+
 if [[ -f "${CADDYFILE}" ]]; then
-  echo "Updating Caddyfile to remove route for api.${CLIENT}.itargs.com"
+  cp "${CADDYFILE}" "${CADDYFILE}.bak.$(date +%Y%m%d-%H%M%S)"
   tmp="$(mktemp)"
-  awk -v host="api.${CLIENT}.itargs.com" '
-    BEGIN {skip=0}
-    # start skipping at host block
-    $0 ~ "^"host"[[:space:]]*\\{" {skip=1; next}
-    # stop skipping at closing brace
-    skip==1 && $0 ~ "^\\}" {skip=0; next}
-    # print lines not skipped
-    skip==0 {print}
+  awk -v begin="$BEGIN" -v end="$END" '
+    $0 == begin {skip=1; next}
+    $0 == end {skip=0; next}
+    skip!=1 {print}
   ' "${CADDYFILE}" > "${tmp}"
   mv "${tmp}" "${CADDYFILE}"
 else
-  echo "Warning: Caddyfile not found, skipping route removal."
+  echo "WARN: Caddyfile not found, skipping Caddy update."
 fi
 
-# Optionally remove folder
+# Optionally purge folder
 if [[ "${MODE}" == "--purge" ]]; then
   echo "Purging folder: ${CLIENT_DIR}"
   rm -rf "${CLIENT_DIR}"
 fi
 
-# Restart caddy to apply changes
-echo "Restarting Caddy..."
-( cd "${ROOT_DIR}/caddy" && docker compose restart )
+# Reload Caddy (no full restart)
+( cd "${ROOT_DIR}/caddy" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) || {
+  echo "WARN: caddy reload failed. Trying restart..."
+  ( cd "${ROOT_DIR}/caddy" && docker compose restart )
+}
 
-echo
-echo "✅ Deleted client: ${CLIENT} (${MODE:-kept volumes})"
-if [[ "${MODE}" != "--purge" ]]; then
-  echo "Note: volumes were kept. Use --purge to delete volumes + folder."
-fi
+echo "✅ Deleted client: ${CLIENT} ${MODE:-"(kept volumes)"}"

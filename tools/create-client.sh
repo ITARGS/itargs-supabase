@@ -14,7 +14,6 @@ if [[ -z "${CLIENT}" ]]; then
   exit 1
 fi
 
-# allow only safe names
 if ! [[ "${CLIENT}" =~ ^[a-z0-9-]+$ ]]; then
   echo "Client name must match: ^[a-z0-9-]+$"
   exit 1
@@ -30,9 +29,14 @@ if [[ -d "${CLIENT_DIR}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${CADDYFILE}" ]]; then
+  echo "Caddyfile not found: ${CADDYFILE}"
+  exit 1
+fi
+
 mkdir -p "${CLIENT_DIR}"
 
-# Generate secrets
+# ---- secrets
 POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 
@@ -66,7 +70,7 @@ gen_jwt () {
 ANON_KEY="$(gen_jwt anon)"
 SERVICE_ROLE_KEY="$(gen_jwt service_role)"
 
-# kong.yml
+# ---- kong.yml
 cat > "${CLIENT_DIR}/kong.yml" <<'YAML'
 _format_version: "2.1"
 _transform: true
@@ -93,7 +97,7 @@ services:
       - paths: ["/storage/v1"]
 YAML
 
-# .env
+# ---- .env
 cat > "${CLIENT_DIR}/.env" <<ENV
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
@@ -107,7 +111,7 @@ SITE_URL=${DOMAIN_SITE}
 URI_ALLOW_LIST=${DOMAIN_SITE},https://${DOMAIN_API}
 ENV
 
-# docker-compose.yml
+# ---- docker-compose.yml
 cat > "${CLIENT_DIR}/docker-compose.yml" <<YAML
 version: "3.9"
 name: supabase_${CLIENT}
@@ -199,26 +203,33 @@ volumes:
   ${CLIENT}_storage_data:
 YAML
 
-# add route to Caddyfile if missing
-if [[ ! -f "${CADDYFILE}" ]]; then
-  echo "Caddyfile not found at: ${CADDYFILE}"
-  exit 1
-fi
+# ---- Update Caddyfile with markers (safe delete later)
+BEGIN="# BEGIN CLIENT ${CLIENT}"
+END="# END CLIENT ${CLIENT}"
 
-if ! grep -q "^api\.${CLIENT}\.itargs\.com" "${CADDYFILE}"; then
-cat >> "${CADDYFILE}" <<CADDY
+if grep -qF "${BEGIN}" "${CADDYFILE}"; then
+  echo "Caddyfile already has block for ${CLIENT}, skipping append."
+else
+  cp "${CADDYFILE}" "${CADDYFILE}.bak.$(date +%Y%m%d-%H%M%S)"
+  cat >> "${CADDYFILE}" <<CADDY
 
+${BEGIN}
 api.${CLIENT}.itargs.com {
   reverse_proxy ${CLIENT}_kong:8000
 }
+${END}
 CADDY
 fi
+
+# ---- Reload Caddy (no full restart)
+( cd "${ROOT_DIR}/caddy" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) || {
+  echo "WARN: caddy reload failed. Trying restart..."
+  ( cd "${ROOT_DIR}/caddy" && docker compose restart )
+}
 
 echo
 echo "✅ Created client: ${CLIENT}"
 echo "API: https://${DOMAIN_API}"
-echo
-echo "Next steps:"
-echo "1) DNS: create A record ${DOMAIN_API} -> your server IP"
-echo "2) Restart Caddy: (cd ${ROOT_DIR}/caddy && docker compose restart)"
-echo "3) Start stack: (cd ${CLIENT_DIR} && docker compose up -d)"
+echo "Next:"
+echo "  DNS A record -> ${DOMAIN_API} -> your server IP"
+echo "  Start stack  -> cd ${CLIENT_DIR} && docker compose up -d"
