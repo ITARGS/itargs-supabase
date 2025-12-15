@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage:
-#   ./tools/create-client.sh <clientname>
-# Example:
-#   ./tools/create-client.sh saknk
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${1:-}"
 
@@ -34,14 +29,14 @@ fi
 
 mkdir -p "${CLIENT_DIR}"
 
-# URL-safe Postgres password (avoids + / = which may break URL parsing)
+# URL-safe Postgres password (avoid + / = because it can break URL parsing)
 POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '+/' 'Aa' | tr -d '=')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 
-# Required by realtime image run.sh
+# Realtime stability
 RLIMIT_NOFILE="1048576"
-
-# Optional: recommended encryption key for realtime (safe defaults)
+APP_NAME="supabase-realtime-${CLIENT}"
+ECTO_MIGRATIONS_TABLE="realtime_schema_migrations"
 DB_ENC_KEY="$(openssl rand -hex 8 | tr -d '\n')"          # 16 chars
 SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')" # 64+ chars
 
@@ -102,7 +97,7 @@ services:
       - paths: ["/storage/v1"]
 YAML
 
-# .env (includes API_EXTERNAL_URL + RLIMIT_NOFILE + realtime keys)
+# .env (all required keys)
 cat > "${CLIENT_DIR}/.env" <<ENV
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
@@ -117,13 +112,15 @@ SITE_URL=${DOMAIN_SITE}
 API_EXTERNAL_URL=${API_EXTERNAL_URL}
 URI_ALLOW_LIST=${DOMAIN_SITE},${API_EXTERNAL_URL}
 
-# Realtime stability / encryption
+# Realtime required/stability
 RLIMIT_NOFILE=${RLIMIT_NOFILE}
+APP_NAME=${APP_NAME}
+ECTO_MIGRATIONS_TABLE=${ECTO_MIGRATIONS_TABLE}
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
 DB_ENC_KEY=${DB_ENC_KEY}
 ENV
 
-# docker-compose.yml (NO version key)
+# docker-compose.yml
 cat > "${CLIENT_DIR}/docker-compose.yml" <<YAML
 name: supabase_${CLIENT}
 
@@ -162,6 +159,7 @@ services:
       GOTRUE_API_PORT: 9999
 
       SITE_URL: \${SITE_URL}
+      GOTRUE_SITE_URL: \${SITE_URL}
       API_EXTERNAL_URL: \${API_EXTERNAL_URL}
       GOTRUE_URI_ALLOW_LIST: \${URI_ALLOW_LIST}
 
@@ -190,14 +188,17 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4000
+
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: \${POSTGRES_USER}
       DB_PASSWORD: \${POSTGRES_PASSWORD}
       DB_NAME: \${POSTGRES_DB}
-      JWT_SECRET: \${JWT_SECRET}
 
+      JWT_SECRET: \${JWT_SECRET}
       RLIMIT_NOFILE: \${RLIMIT_NOFILE}
+      APP_NAME: \${APP_NAME}
+      ECTO_MIGRATIONS_TABLE: \${ECTO_MIGRATIONS_TABLE}
       SECRET_KEY_BASE: \${SECRET_KEY_BASE}
       DB_ENC_KEY: \${DB_ENC_KEY}
     depends_on: [db]
@@ -239,9 +240,7 @@ BEGIN="# BEGIN CLIENT ${CLIENT}"
 END="# END CLIENT ${CLIENT}"
 
 if [[ -d "${CADDY_DIR}" && -f "${CADDYFILE}" ]]; then
-  if grep -qF "${BEGIN}" "${CADDYFILE}"; then
-    echo "Caddyfile already has block for ${CLIENT}, skipping append."
-  else
+  if ! grep -qF "${BEGIN}" "${CADDYFILE}"; then
     cp "${CADDYFILE}" "${CADDYFILE}.bak.$(date +%Y%m%d-%H%M%S)"
     cat >> "${CADDYFILE}" <<CADDY
 
@@ -251,10 +250,8 @@ api.${CLIENT}.itargs.com {
 }
 ${END}
 CADDY
-    echo "Added route: api.${CLIENT}.itargs.com -> ${CLIENT}_kong:8000"
   fi
 
-  # Reload Caddy if running
   if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
     ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
       || ( cd "${CADDY_DIR}" && docker compose restart ) || true
@@ -263,8 +260,6 @@ else
   echo "Caddy not found (caddy/Caddyfile missing). Skipping Caddy update."
 fi
 
-echo
 echo "✅ Created client: ${CLIENT}"
-echo "Folder: ${CLIENT_DIR}"
 echo "API: ${API_EXTERNAL_URL}"
 echo "Next: cd ${CLIENT_DIR} && docker compose up -d"
