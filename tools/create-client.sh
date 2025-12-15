@@ -1,135 +1,173 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${1:-}"
 
-if [[ -z "${CLIENT}" ]]; then
-  echo "Usage: $0 <clientname>"
+if [[ -z "$CLIENT" ]]; then
+  echo "Usage: ./tools/create-client.sh <client-name>"
   exit 1
 fi
 
-if ! [[ "${CLIENT}" =~ ^[a-z0-9-]+$ ]]; then
-  echo "Client name must match: ^[a-z0-9-]+$"
+# normalize client name (lowercase, no spaces)
+CLIENT="$(echo "$CLIENT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+if [[ -z "$CLIENT" ]]; then
+  echo "Invalid client name."
   exit 1
 fi
 
-CLIENT_DIR="${ROOT_DIR}/clients/${CLIENT}"
-CADDY_DIR="${ROOT_DIR}/caddy"
-CADDYFILE="${CADDY_DIR}/Caddyfile"
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CLIENT_DIR="$BASE_DIR/clients/$CLIENT"
 
-DOMAIN_API="api.${CLIENT}.itargs.com"
-DOMAIN_SITE="https://${CLIENT}.itargs.com"
-API_EXTERNAL_URL="https://${DOMAIN_API}"
-
-if [[ -d "${CLIENT_DIR}" ]]; then
-  echo "Client already exists: ${CLIENT_DIR}"
+if [[ -d "$CLIENT_DIR" ]]; then
+  echo "Client already exists: $CLIENT"
   exit 1
 fi
 
-mkdir -p "${CLIENT_DIR}"
+mkdir -p "$CLIENT_DIR/data/db" "$CLIENT_DIR/data/storage"
 
-# URL-safe Postgres password (avoid + / = which can break URLs)
-POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '+/' 'Aa' | tr -d '=')"
+POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
+SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')"
+DB_ENC_KEY="$(openssl rand -hex 16 | tr -d '\n')"
 
-# Realtime requirements/stability
-RLIMIT_NOFILE="1048576"
-APP_NAME="supabase-realtime-${CLIENT}"
-DB_ENC_KEY="$(openssl rand -hex 8 | tr -d '\n')"          # 16 chars
-SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')" # 64+ chars
+cat > "$CLIENT_DIR/.env" <<EOF
+CLIENT=$CLIENT
 
-gen_jwt () {
-  local role="$1"
-  docker run --rm \
-    -e JWT_SECRET="${JWT_SECRET}" \
-    -e ROLE="${role}" \
-    node:20-alpine sh -lc "
-      node -e '
-        const crypto = require(\"crypto\");
-        const b64url = (v) => Buffer.from(v).toString(\"base64\")
-          .replace(/=/g, \"\").replace(/\\+/g, \"-\").replace(/\\//g, \"_\");
-        const header = b64url(JSON.stringify({alg:\"HS256\",typ:\"JWT\"}));
-        const now = Math.floor(Date.now()/1000);
-        const payload = b64url(JSON.stringify({
-          iss:\"supabase\",
-          aud:\"authenticated\",
-          role: process.env.ROLE,
-          iat: now,
-          exp: now + 10*365*24*60*60
-        }));
-        const data = header + \".\" + payload;
-        const sig = crypto.createHmac(\"sha256\", process.env.JWT_SECRET).update(data)
-          .digest(\"base64\").replace(/=/g, \"\").replace(/\\+/g, \"-\").replace(/\\//g, \"_\");
-        process.stdout.write(data + \".\" + sig);
-      '
-    "
-}
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 
-ANON_KEY="$(gen_jwt anon)"
-SERVICE_ROLE_KEY="$(gen_jwt service_role)"
+JWT_SECRET=$JWT_SECRET
 
-# kong.yml
-cat > "${CLIENT_DIR}/kong.yml" <<'YAML'
+# URLs (required by auth)
+SITE_URL=https://$CLIENT.itargs.com
+GOTRUE_SITE_URL=https://$CLIENT.itargs.com
+API_EXTERNAL_URL=https://api.$CLIENT.itargs.com
+URI_ALLOW_LIST=https://$CLIENT.itargs.com,https://api.$CLIENT.itargs.com
+
+# Realtime
+APP_NAME=supabase-realtime-$CLIENT
+RLIMIT_NOFILE=1048576
+SECRET_KEY_BASE=$SECRET_KEY_BASE
+DB_ENC_KEY=$DB_ENC_KEY
+EOF
+
+cat > "$CLIENT_DIR/kong.yml" <<'EOF'
 _format_version: "2.1"
 _transform: true
 
 services:
-  - name: auth
-    url: http://auth:9999
-    routes:
-      - paths: ["/auth/v1"]
-
   - name: rest
     url: http://rest:3000
     routes:
-      - paths: ["/rest/v1"]
-
+      - name: rest
+        paths:
+          - /rest/v1
+  - name: auth
+    url: http://auth:9999
+    routes:
+      - name: auth
+        paths:
+          - /auth/v1
   - name: realtime
     url: http://realtime:4000
     routes:
-      - paths: ["/realtime/v1"]
-
+      - name: realtime
+        paths:
+          - /realtime/v1
   - name: storage
     url: http://storage:5000
     routes:
-      - paths: ["/storage/v1"]
-YAML
+      - name: storage
+        paths:
+          - /storage/v1
+EOF
 
-# .env (all required keys)
-cat > "${CLIENT_DIR}/.env" <<ENV
-POSTGRES_DB=postgres
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-
-JWT_SECRET=${JWT_SECRET}
-ANON_KEY=${ANON_KEY}
-SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
-
-SITE_URL=${DOMAIN_SITE}
-API_EXTERNAL_URL=${API_EXTERNAL_URL}
-URI_ALLOW_LIST=${DOMAIN_SITE},${API_EXTERNAL_URL}
-
-RLIMIT_NOFILE=${RLIMIT_NOFILE}
-APP_NAME=${APP_NAME}
-SECRET_KEY_BASE=${SECRET_KEY_BASE}
-DB_ENC_KEY=${DB_ENC_KEY}
-ENV
-
-# docker-compose.yml (NO "version:" + includes realtime DB compatibility fix)
-cat > "${CLIENT_DIR}/docker-compose.yml" <<YAML
+cat > "$CLIENT_DIR/docker-compose.yml" <<EOF
 name: supabase_${CLIENT}
 
 services:
   db:
     image: supabase/postgres:15.1.0.147
     restart: unless-stopped
-    environment:
-      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
-      POSTGRES_DB: \${POSTGRES_DB}
-      POSTGRES_USER: \${POSTGRES_USER}
+    env_file: .env
     volumes:
-      - ${CLIENT}_db_data:/var/lib/postgresql/data
+      - ./data/db:/var/lib/postgresql/data
+    networks: [${CLIENT}_internal]
+
+  auth:
+    image: supabase/gotrue:v2.151.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+
+      SITE_URL: \${SITE_URL}
+      GOTRUE_SITE_URL: \${GOTRUE_SITE_URL}
+      API_EXTERNAL_URL: \${API_EXTERNAL_URL}
+      GOTRUE_URI_ALLOW_LIST: \${URI_ALLOW_LIST}
+
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}?sslmode=disable
+
+      GOTRUE_JWT_SECRET: \${JWT_SECRET}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_EXP: 3600
+
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMS_AUTOCONFIRM: "true"
+      GOTRUE_DISABLE_SIGNUP: "false"
+    depends_on: [db]
+    networks: [${CLIENT}_internal]
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PGRST_DB_URI: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: \${JWT_SECRET}
+    depends_on: [db]
+    networks: [${CLIENT}_internal]
+
+  storage:
+    image: supabase/storage-api:v1.11.13
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+      PGRST_JWT_SECRET: \${JWT_SECRET}
+    volumes:
+      - ./data/storage:/var/lib/storage
+    depends_on: [db]
+    networks: [${CLIENT}_internal]
+
+  realtime:
+    image: supabase/realtime:v2.32.5
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 4000
+      APP_NAME: \${APP_NAME}
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: \${POSTGRES_DB}
+      DB_USER: \${POSTGRES_USER}
+      DB_PASSWORD: \${POSTGRES_PASSWORD}
+
+      JWT_SECRET: \${JWT_SECRET}
+      SECRET_KEY_BASE: \${SECRET_KEY_BASE}
+      DB_ENC_KEY: \${DB_ENC_KEY}
+
+      # FIX: avoid conflict with public.schema_migrations
+      ECTO_MIGRATIONS_TABLE: realtime_schema_migrations
+
+      RLIMIT_NOFILE: \${RLIMIT_NOFILE}
+    depends_on: [db]
     networks: [${CLIENT}_internal]
 
   kong:
@@ -143,139 +181,17 @@ services:
       KONG_ADMIN_LISTEN: "0.0.0.0:8001"
     volumes:
       - ./kong.yml:/kong/kong.yml:ro
+    depends_on: [auth, rest, realtime, storage]
     networks:
       - ${CLIENT}_internal
       - edge
 
-  auth:
-    image: supabase/gotrue:v2.151.0
-    restart: unless-stopped
-    environment:
-      GOTRUE_API_HOST: 0.0.0.0
-      GOTRUE_API_PORT: 9999
-
-      SITE_URL: \${SITE_URL}
-      GOTRUE_SITE_URL: \${SITE_URL}
-      API_EXTERNAL_URL: \${API_EXTERNAL_URL}
-      GOTRUE_URI_ALLOW_LIST: \${URI_ALLOW_LIST}
-
-      GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}?sslmode=disable
-
-      GOTRUE_JWT_SECRET: \${JWT_SECRET}
-      GOTRUE_JWT_EXP: 3600
-      GOTRUE_JWT_AUD: authenticated
-      GOTRUE_DISABLE_SIGNUP: "false"
-    depends_on: [db]
-    networks: [${CLIENT}_internal]
-
-  rest:
-    image: postgrest/postgrest:v12.2.0
-    restart: unless-stopped
-    environment:
-      PGRST_DB_URI: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
-      PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: \${JWT_SECRET}
-    depends_on: [db]
-    networks: [${CLIENT}_internal]
-
-  storage:
-    image: supabase/storage-api:v1.11.13
-    restart: unless-stopped
-    environment:
-      ANON_KEY: \${ANON_KEY}
-      SERVICE_KEY: \${SERVICE_ROLE_KEY}
-
-      POSTGREST_URL: http://rest:3000
-      PGRST_JWT_SECRET: \${JWT_SECRET}
-      DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
-
-      STORAGE_BACKEND: file
-      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
-      TENANT_ID: ${CLIENT}
-    volumes:
-      - ${CLIENT}_storage_data:/var/lib/storage
-    depends_on: [db, rest]
-    networks: [${CLIENT}_internal]
-
-  # ✅ One-shot DB compatibility fix for Realtime migrations:
-  #    - ensures schema_migrations has inserted_at
-  #    - ensures schema_migrations.version is bigint
-  realtime_dbfix:
-    image: supabase/postgres:15.1.0.147
-    restart: "no"
-    environment:
-      PGPASSWORD: \${POSTGRES_PASSWORD}
-    entrypoint: ["/bin/sh","-lc"]
-    command: >
-      psql -h db -U \${POSTGRES_USER} -d \${POSTGRES_DB} -v ON_ERROR_STOP=1
-      -c "ALTER TABLE IF EXISTS schema_migrations
-          ADD COLUMN IF NOT EXISTS inserted_at timestamptz DEFAULT now();"
-      -c "ALTER TABLE IF EXISTS schema_migrations
-          ALTER COLUMN version TYPE bigint USING version::bigint;"
-    depends_on: [db]
-    networks: [${CLIENT}_internal]
-
-  realtime:
-    image: supabase/realtime:v2.32.5
-    restart: unless-stopped
-    environment:
-      PORT: 4000
-
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: \${POSTGRES_USER}
-      DB_PASSWORD: \${POSTGRES_PASSWORD}
-      DB_NAME: \${POSTGRES_DB}
-
-      JWT_SECRET: \${JWT_SECRET}
-      RLIMIT_NOFILE: \${RLIMIT_NOFILE}
-      APP_NAME: \${APP_NAME}
-      SECRET_KEY_BASE: \${SECRET_KEY_BASE}
-      DB_ENC_KEY: \${DB_ENC_KEY}
-    depends_on:
-      - realtime_dbfix
-      - db
-    networks: [${CLIENT}_internal]
-
 networks:
-  edge:
-    external: true
-    name: edge
   ${CLIENT}_internal:
-    name: ${CLIENT}_internal
+    driver: bridge
+EOF
 
-volumes:
-  ${CLIENT}_db_data:
-  ${CLIENT}_storage_data:
-YAML
-
-# Update Caddyfile (append block safely)
-BEGIN="# BEGIN CLIENT ${CLIENT}"
-END="# END CLIENT ${CLIENT}"
-
-if [[ -d "${CADDY_DIR}" && -f "${CADDYFILE}" ]]; then
-  if ! grep -qF "${BEGIN}" "${CADDYFILE}"; then
-    cp "${CADDYFILE}" "${CADDYFILE}.bak.$(date +%Y%m%d-%H%M%S)"
-    cat >> "${CADDYFILE}" <<CADDY
-
-${BEGIN}
-api.${CLIENT}.itargs.com {
-  reverse_proxy ${CLIENT}_kong:8000
-}
-${END}
-CADDY
-  fi
-
-  # reload caddy if running
-  if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
-    ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
-      || ( cd "${CADDY_DIR}" && docker compose restart ) || true
-  fi
-else
-  echo "Caddy not found (caddy/Caddyfile missing). Skipping Caddy update."
-fi
-
-echo "✅ Created client: ${CLIENT}"
-echo "API: ${API_EXTERNAL_URL}"
-echo "Next: cd ${CLIENT_DIR} && docker compose up -d"
+echo "✅ Client created: $CLIENT"
+echo "Next:"
+echo "  cd clients/$CLIENT"
+echo "  docker compose up -d"

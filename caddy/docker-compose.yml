@@ -10,7 +10,7 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./:/etc/caddy:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -19,7 +19,6 @@ services:
 networks:
   edge:
     external: true
-    name: edge
 
 volumes:
   caddy_data:
