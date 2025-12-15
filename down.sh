@@ -2,14 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLIENTS_ROOT="${ROOT_DIR}/clients"
 
 echo "==> DOWN: stopping services"
 
-CLIENTS_ROOT="${ROOT_DIR}/clients"
-
-# ---------------------------
 # Stop clients first
-# ---------------------------
 if [[ ! -d "${CLIENTS_ROOT}" ]]; then
   echo "-> No clients directory, skipping clients"
 else
@@ -34,9 +31,7 @@ else
   fi
 fi
 
-# ---------------------------
-# Stop Caddy (if exists)
-# ---------------------------
+# Stop Caddy (optional)
 if [[ -d "${ROOT_DIR}/caddy" && -f "${ROOT_DIR}/caddy/docker-compose.yml" ]]; then
   echo "-> Stopping Caddy"
   ( cd "${ROOT_DIR}/caddy" && docker compose down )

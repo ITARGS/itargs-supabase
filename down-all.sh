@@ -6,6 +6,7 @@ set -euo pipefail
 #   ./down-all.sh --purge
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLIENTS_ROOT="${ROOT_DIR}/clients"
 MODE="${1:-}"
 
 PURGE="false"
@@ -18,11 +19,7 @@ fi
 
 echo "==> DOWN-ALL (purge=${PURGE})"
 
-CLIENTS_ROOT="${ROOT_DIR}/clients"
-
-# ---------------------------
 # Stop clients
-# ---------------------------
 if [[ ! -d "${CLIENTS_ROOT}" ]]; then
   echo "-> No clients directory, skipping clients"
 else
@@ -51,9 +48,7 @@ else
   fi
 fi
 
-# ---------------------------
 # Stop Caddy
-# ---------------------------
 if [[ -d "${ROOT_DIR}/caddy" && -f "${ROOT_DIR}/caddy/docker-compose.yml" ]]; then
   echo "-> Stopping Caddy"
   ( cd "${ROOT_DIR}/caddy" && docker compose down )

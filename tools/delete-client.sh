@@ -4,8 +4,8 @@ set -euo pipefail
 # Usage:
 #   ./tools/delete-client.sh <clientname> [--purge]
 #
-# Without --purge: stops stack, keeps volumes + folder
-# With --purge:    stops stack, deletes volumes + folder
+# Without --purge: docker compose down (keeps volumes) + keeps folder
+# With --purge:    docker compose down -v (deletes volumes) + deletes folder
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${1:-}"
@@ -22,10 +22,11 @@ if ! [[ "${CLIENT}" =~ ^[a-z0-9-]+$ ]]; then
 fi
 
 CLIENT_DIR="${ROOT_DIR}/clients/${CLIENT}"
-CADDYFILE="${ROOT_DIR}/caddy/Caddyfile"
+CADDY_DIR="${ROOT_DIR}/caddy"
+CADDYFILE="${CADDY_DIR}/Caddyfile"
 
-if [[ ! -d "${CLIENT_DIR}" ]]; then
-  echo "Client folder not found: ${CLIENT_DIR}"
+if [[ ! -d "${CLIENT_DIR}" || ! -f "${CLIENT_DIR}/docker-compose.yml" ]]; then
+  echo "Client not found: ${CLIENT_DIR}"
   exit 1
 fi
 
@@ -36,7 +37,7 @@ else
   ( cd "${CLIENT_DIR}" && docker compose down )
 fi
 
-# Remove Caddyfile block by markers
+# Remove Caddyfile block (markers)
 BEGIN="# BEGIN CLIENT ${CLIENT}"
 END="# END CLIENT ${CLIENT}"
 
@@ -49,20 +50,23 @@ if [[ -f "${CADDYFILE}" ]]; then
     skip!=1 {print}
   ' "${CADDYFILE}" > "${tmp}"
   mv "${tmp}" "${CADDYFILE}"
+  echo "Removed route from Caddyfile for api.${CLIENT}.itargs.com"
 else
-  echo "WARN: Caddyfile not found, skipping Caddy update."
+  echo "Caddyfile not found. Skipping Caddy update."
 fi
 
-# Optionally purge folder
+# Purge client folder
 if [[ "${MODE}" == "--purge" ]]; then
-  echo "Purging folder: ${CLIENT_DIR}"
+  echo "Purging client folder: ${CLIENT_DIR}"
   rm -rf "${CLIENT_DIR}"
 fi
 
-# Reload Caddy (no full restart)
-( cd "${ROOT_DIR}/caddy" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) || {
-  echo "WARN: caddy reload failed. Trying restart..."
-  ( cd "${ROOT_DIR}/caddy" && docker compose restart )
-}
+# Reload Caddy if possible
+if [[ -d "${CADDY_DIR}" && -f "${CADDY_DIR}/docker-compose.yml" ]]; then
+  if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
+    ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
+      || ( cd "${CADDY_DIR}" && docker compose restart ) || true
+  fi
+fi
 
 echo "✅ Deleted client: ${CLIENT} ${MODE:-"(kept volumes)"}"

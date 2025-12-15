@@ -36,5 +36,4 @@ echo "-> Starting client stack: ${CLIENT}"
 ( cd "${CLIENT_DIR}" && docker compose up -d )
 
 echo
-echo "✅ Started ${CLIENT}"
-( cd "${CLIENT_DIR}" && docker compose ps )
+( cd "${CLIENT_DIR}" && docker compose ps ) || true

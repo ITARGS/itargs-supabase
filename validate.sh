@@ -8,7 +8,7 @@ CADDYFILE="${CADDY_DIR}/Caddyfile"
 
 echo "==> VALIDATE"
 
-# Docker check
+# Docker checks
 if ! command -v docker >/dev/null 2>&1; then
   echo "❌ docker not found"
   exit 1
@@ -31,7 +31,7 @@ else
   echo "⚠️  caddy not found (ok if you don't use it)"
 fi
 
-# Client checks
+# Clients checks
 if [[ ! -d "${CLIENTS_ROOT}" ]]; then
   echo "⚠️  clients directory missing: ${CLIENTS_ROOT}"
   exit 0
