@@ -279,6 +279,9 @@ services:
 networks:
   ${CLIENT}_internal:
     driver: bridge
+  edge:
+    external: true
+    name: edge
 EOF
 
 echo "✅ Client created: $CLIENT"
