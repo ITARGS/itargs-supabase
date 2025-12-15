@@ -14,7 +14,6 @@ if [[ -z "${CLIENT}" ]]; then
   exit 1
 fi
 
-# safe names only
 if ! [[ "${CLIENT}" =~ ^[a-z0-9-]+$ ]]; then
   echo "Client name must match: ^[a-z0-9-]+$"
   exit 1
@@ -26,6 +25,7 @@ CADDYFILE="${CADDY_DIR}/Caddyfile"
 
 DOMAIN_API="api.${CLIENT}.itargs.com"
 DOMAIN_SITE="https://${CLIENT}.itargs.com"
+API_EXTERNAL_URL="https://${DOMAIN_API}"
 
 if [[ -d "${CLIENT_DIR}" ]]; then
   echo "Client already exists: ${CLIENT_DIR}"
@@ -34,11 +34,17 @@ fi
 
 mkdir -p "${CLIENT_DIR}"
 
-# Generate secrets
-POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+# URL-safe Postgres password (avoids + / = which may break URL parsing)
+POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '+/' 'Aa' | tr -d '=')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 
-# Generate JWTs signed with JWT_SECRET using a temporary node container
+# Required by realtime image run.sh
+RLIMIT_NOFILE="1048576"
+
+# Optional: recommended encryption key for realtime (safe defaults)
+DB_ENC_KEY="$(openssl rand -hex 8 | tr -d '\n')"          # 16 chars
+SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')" # 64+ chars
+
 gen_jwt () {
   local role="$1"
   docker run --rm \
@@ -96,7 +102,7 @@ services:
       - paths: ["/storage/v1"]
 YAML
 
-# .env  (includes API_EXTERNAL_URL fix)
+# .env (includes API_EXTERNAL_URL + RLIMIT_NOFILE + realtime keys)
 cat > "${CLIENT_DIR}/.env" <<ENV
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
@@ -108,11 +114,16 @@ SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 
 # Public URLs
 SITE_URL=${DOMAIN_SITE}
-API_EXTERNAL_URL=https://${DOMAIN_API}
-URI_ALLOW_LIST=${DOMAIN_SITE},https://${DOMAIN_API}
+API_EXTERNAL_URL=${API_EXTERNAL_URL}
+URI_ALLOW_LIST=${DOMAIN_SITE},${API_EXTERNAL_URL}
+
+# Realtime stability / encryption
+RLIMIT_NOFILE=${RLIMIT_NOFILE}
+SECRET_KEY_BASE=${SECRET_KEY_BASE}
+DB_ENC_KEY=${DB_ENC_KEY}
 ENV
 
-# docker-compose.yml (includes API_EXTERNAL_URL passed into auth)
+# docker-compose.yml (NO version key)
 cat > "${CLIENT_DIR}/docker-compose.yml" <<YAML
 name: supabase_${CLIENT}
 
@@ -185,6 +196,10 @@ services:
       DB_PASSWORD: \${POSTGRES_PASSWORD}
       DB_NAME: \${POSTGRES_DB}
       JWT_SECRET: \${JWT_SECRET}
+
+      RLIMIT_NOFILE: \${RLIMIT_NOFILE}
+      SECRET_KEY_BASE: \${SECRET_KEY_BASE}
+      DB_ENC_KEY: \${DB_ENC_KEY}
     depends_on: [db]
     networks: [${CLIENT}_internal]
 
@@ -194,10 +209,11 @@ services:
     environment:
       ANON_KEY: \${ANON_KEY}
       SERVICE_KEY: \${SERVICE_ROLE_KEY}
+
       POSTGREST_URL: http://rest:3000
       PGRST_JWT_SECRET: \${JWT_SECRET}
       DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
-      FILE_SIZE_LIMIT: 52428800
+
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: ${CLIENT}
@@ -218,7 +234,7 @@ volumes:
   ${CLIENT}_storage_data:
 YAML
 
-# Update Caddyfile with markers (safe delete)
+# Update Caddyfile with markers
 BEGIN="# BEGIN CLIENT ${CLIENT}"
 END="# END CLIENT ${CLIENT}"
 
@@ -235,10 +251,10 @@ api.${CLIENT}.itargs.com {
 }
 ${END}
 CADDY
-    echo "Added route to Caddyfile for api.${CLIENT}.itargs.com"
+    echo "Added route: api.${CLIENT}.itargs.com -> ${CLIENT}_kong:8000"
   fi
 
-  # Reload Caddy if container exists, otherwise skip
+  # Reload Caddy if running
   if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
     ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
       || ( cd "${CADDY_DIR}" && docker compose restart ) || true
@@ -249,9 +265,6 @@ fi
 
 echo
 echo "✅ Created client: ${CLIENT}"
-echo "Client folder: ${CLIENT_DIR}"
-echo "API: https://${DOMAIN_API}"
-echo
-echo "Next steps:"
-echo "1) DNS: Create A record ${DOMAIN_API} -> your server IP"
-echo "2) Start stack: cd ${CLIENT_DIR} && docker compose up -d"
+echo "Folder: ${CLIENT_DIR}"
+echo "API: ${API_EXTERNAL_URL}"
+echo "Next: cd ${CLIENT_DIR} && docker compose up -d"

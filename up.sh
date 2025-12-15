@@ -2,23 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLIENTS_ROOT="${ROOT_DIR}/clients"
 
 echo "==> UP: starting services"
 
-# ---------------------------
-# Start Caddy (if exists)
-# ---------------------------
 if [[ -d "${ROOT_DIR}/caddy" && -f "${ROOT_DIR}/caddy/docker-compose.yml" ]]; then
   echo "-> Starting Caddy"
   ( cd "${ROOT_DIR}/caddy" && docker compose up -d )
 else
   echo "-> Caddy not found, skipping"
 fi
-
-# ---------------------------
-# Start clients (if any)
-# ---------------------------
-CLIENTS_ROOT="${ROOT_DIR}/clients"
 
 if [[ ! -d "${CLIENTS_ROOT}" ]]; then
   echo "-> No clients directory, skipping clients"
@@ -39,6 +32,5 @@ else
   fi
 fi
 
-echo
 echo "==> UP complete"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

@@ -4,8 +4,8 @@ set -euo pipefail
 # Usage:
 #   ./tools/delete-client.sh <clientname> [--purge]
 #
-# Without --purge: docker compose down (keeps volumes) + keeps folder
-# With --purge:    docker compose down -v (deletes volumes) + deletes folder
+# Without --purge: stops containers, keeps volumes + folder
+# With --purge:    stops containers + deletes volumes + deletes folder
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT="${1:-}"
@@ -50,18 +50,17 @@ if [[ -f "${CADDYFILE}" ]]; then
     skip!=1 {print}
   ' "${CADDYFILE}" > "${tmp}"
   mv "${tmp}" "${CADDYFILE}"
-  echo "Removed route from Caddyfile for api.${CLIENT}.itargs.com"
+  echo "Removed Caddy route for api.${CLIENT}.itargs.com"
 else
-  echo "Caddyfile not found. Skipping Caddy update."
+  echo "Caddyfile not found, skipping Caddy update."
 fi
 
-# Purge client folder
 if [[ "${MODE}" == "--purge" ]]; then
   echo "Purging client folder: ${CLIENT_DIR}"
   rm -rf "${CLIENT_DIR}"
 fi
 
-# Reload Caddy if possible
+# Reload Caddy if running
 if [[ -d "${CADDY_DIR}" && -f "${CADDY_DIR}/docker-compose.yml" ]]; then
   if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
     ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
