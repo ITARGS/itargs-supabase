@@ -29,14 +29,13 @@ fi
 
 mkdir -p "${CLIENT_DIR}"
 
-# URL-safe Postgres password (avoid + / = because it can break URL parsing)
+# URL-safe Postgres password (avoid + / = which can break URLs)
 POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '+/' 'Aa' | tr -d '=')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 
-# Realtime stability
+# Realtime requirements/stability
 RLIMIT_NOFILE="1048576"
 APP_NAME="supabase-realtime-${CLIENT}"
-ECTO_MIGRATIONS_TABLE="realtime_schema_migrations"
 DB_ENC_KEY="$(openssl rand -hex 8 | tr -d '\n')"          # 16 chars
 SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')" # 64+ chars
 
@@ -107,20 +106,17 @@ JWT_SECRET=${JWT_SECRET}
 ANON_KEY=${ANON_KEY}
 SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 
-# Public URLs
 SITE_URL=${DOMAIN_SITE}
 API_EXTERNAL_URL=${API_EXTERNAL_URL}
 URI_ALLOW_LIST=${DOMAIN_SITE},${API_EXTERNAL_URL}
 
-# Realtime required/stability
 RLIMIT_NOFILE=${RLIMIT_NOFILE}
 APP_NAME=${APP_NAME}
-ECTO_MIGRATIONS_TABLE=${ECTO_MIGRATIONS_TABLE}
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
 DB_ENC_KEY=${DB_ENC_KEY}
 ENV
 
-# docker-compose.yml
+# docker-compose.yml (NO "version:" + includes realtime DB compatibility fix)
 cat > "${CLIENT_DIR}/docker-compose.yml" <<YAML
 name: supabase_${CLIENT}
 
@@ -183,27 +179,6 @@ services:
     depends_on: [db]
     networks: [${CLIENT}_internal]
 
-  realtime:
-    image: supabase/realtime:v2.32.5
-    restart: unless-stopped
-    environment:
-      PORT: 4000
-
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: \${POSTGRES_USER}
-      DB_PASSWORD: \${POSTGRES_PASSWORD}
-      DB_NAME: \${POSTGRES_DB}
-
-      JWT_SECRET: \${JWT_SECRET}
-      RLIMIT_NOFILE: \${RLIMIT_NOFILE}
-      APP_NAME: \${APP_NAME}
-      ECTO_MIGRATIONS_TABLE: \${ECTO_MIGRATIONS_TABLE}
-      SECRET_KEY_BASE: \${SECRET_KEY_BASE}
-      DB_ENC_KEY: \${DB_ENC_KEY}
-    depends_on: [db]
-    networks: [${CLIENT}_internal]
-
   storage:
     image: supabase/storage-api:v1.11.13
     restart: unless-stopped
@@ -223,6 +198,46 @@ services:
     depends_on: [db, rest]
     networks: [${CLIENT}_internal]
 
+  # ✅ One-shot DB compatibility fix for Realtime migrations:
+  #    - ensures schema_migrations has inserted_at
+  #    - ensures schema_migrations.version is bigint
+  realtime_dbfix:
+    image: supabase/postgres:15.1.0.147
+    restart: "no"
+    environment:
+      PGPASSWORD: \${POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh","-lc"]
+    command: >
+      psql -h db -U \${POSTGRES_USER} -d \${POSTGRES_DB} -v ON_ERROR_STOP=1
+      -c "ALTER TABLE IF EXISTS schema_migrations
+          ADD COLUMN IF NOT EXISTS inserted_at timestamptz DEFAULT now();"
+      -c "ALTER TABLE IF EXISTS schema_migrations
+          ALTER COLUMN version TYPE bigint USING version::bigint;"
+    depends_on: [db]
+    networks: [${CLIENT}_internal]
+
+  realtime:
+    image: supabase/realtime:v2.32.5
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: \${POSTGRES_USER}
+      DB_PASSWORD: \${POSTGRES_PASSWORD}
+      DB_NAME: \${POSTGRES_DB}
+
+      JWT_SECRET: \${JWT_SECRET}
+      RLIMIT_NOFILE: \${RLIMIT_NOFILE}
+      APP_NAME: \${APP_NAME}
+      SECRET_KEY_BASE: \${SECRET_KEY_BASE}
+      DB_ENC_KEY: \${DB_ENC_KEY}
+    depends_on:
+      - realtime_dbfix
+      - db
+    networks: [${CLIENT}_internal]
+
 networks:
   edge:
     external: true
@@ -235,7 +250,7 @@ volumes:
   ${CLIENT}_storage_data:
 YAML
 
-# Update Caddyfile with markers
+# Update Caddyfile (append block safely)
 BEGIN="# BEGIN CLIENT ${CLIENT}"
 END="# END CLIENT ${CLIENT}"
 
@@ -252,6 +267,7 @@ ${END}
 CADDY
   fi
 
+  # reload caddy if running
   if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
     ( cd "${CADDY_DIR}" && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile ) \
       || ( cd "${CADDY_DIR}" && docker compose restart ) || true
