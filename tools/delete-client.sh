@@ -22,4 +22,22 @@ echo "Stopping client containers: $CLIENT"
 echo "Removing client folder: $CLIENT_DIR"
 rm -rf "$CLIENT_DIR"
 
+# Remove Caddy route
+CADDY_DIR="$BASE_DIR/caddy"
+CADDYFILE="$CADDY_DIR/Caddyfile"
+
+if [[ -f "$CADDYFILE" ]]; then
+  echo "Removing Caddy routes..."
+  # Remove the client block from Caddyfile
+  sed -i.bak "/# Client: $CLIENT/,/^$/d" "$CADDYFILE" 2>/dev/null || \
+  sed -i '' "/# Client: $CLIENT/,/^$/d" "$CADDYFILE" 2>/dev/null || true
+  
+  # Reload Caddy if running
+  if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
+    echo "Reloading Caddy..."
+    docker exec caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || \
+    (cd "$CADDY_DIR" && docker compose restart) || true
+  fi
+fi
+
 echo "✅ Client deleted: $CLIENT"

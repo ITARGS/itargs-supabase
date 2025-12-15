@@ -126,9 +126,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authen
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Create schema_migrations table for PostgREST if it doesn't exist
+-- Create schema_migrations table with inserted_at column for Realtime compatibility
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
-  version TEXT PRIMARY KEY
+  version TEXT PRIMARY KEY,
+  inserted_at TIMESTAMP DEFAULT NOW()
 );
 
 INITSQL
@@ -284,7 +285,33 @@ networks:
     name: edge
 EOF
 
+# Add Caddy routing
+CADDY_DIR="$BASE_DIR/caddy"
+CADDYFILE="$CADDY_DIR/Caddyfile"
+
+if [[ -f "$CADDYFILE" ]]; then
+  echo "Adding Caddy routes..."
+  
+  # Add route for this client
+  cat >> "$CADDYFILE" <<CADDY
+
+# Client: $CLIENT
+api.$CLIENT.itargs.com {
+  reverse_proxy ${CLIENT}_kong:8000
+}
+
+CADDY
+  
+  # Reload Caddy if running
+  if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
+    echo "Reloading Caddy..."
+    docker exec caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || \
+    (cd "$CADDY_DIR" && docker compose restart) || true
+  fi
+fi
+
 echo "✅ Client created: $CLIENT"
 echo "Next:"
 echo "  cd clients/$CLIENT"
 echo "  docker compose up -d"
+

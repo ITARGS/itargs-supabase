@@ -2,14 +2,4 @@
   email admin@itargs.com
 }
 
-# API subdomains -> client kong
-api.*.itargs.com {
-  @client host_regexp client ^api\.(?P<name>[a-z0-9_-]+)\.itargs\.com$
-  reverse_proxy @client {http.regexp.client.name}_kong:8000
-}
-
-# App domains -> client kong
-*.itargs.com {
-  @client host_regexp client ^(?P<name>[a-z0-9_-]+)\.itargs\.com$
-  reverse_proxy @client {http.regexp.client.name}_kong:8000
-}
+# Client routes will be added here by create-client.sh
