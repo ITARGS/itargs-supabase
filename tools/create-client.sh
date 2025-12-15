@@ -25,9 +25,9 @@ fi
 
 mkdir -p "$CLIENT_DIR/data/db" "$CLIENT_DIR/data/storage"
 
-POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+POSTGRES_PASSWORD="$(openssl rand -hex 32 | tr -d '\n')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
-SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')"
+SECRET_KEY_BASE="$(openssl rand -hex 48 | tr -d '\n')"
 DB_ENC_KEY="$(openssl rand -hex 16 | tr -d '\n')"
 
 # Generate JWT tokens for API access
