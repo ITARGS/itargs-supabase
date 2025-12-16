@@ -274,18 +274,24 @@ services:
     env_file: .env
     environment:
       STUDIO_PG_META_URL: http://rest:3000
-      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
       
       SUPABASE_URL: https://api.${CLIENT}.itargs.com
       SUPABASE_PUBLIC_URL: https://api.${CLIENT}.itargs.com
       SUPABASE_ANON_KEY: \${ANON_KEY}
       SUPABASE_SERVICE_KEY: \${SERVICE_ROLE_KEY}
       
+      # Direct database connection for Studio
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: \${POSTGRES_DB}
+      POSTGRES_USER: \${POSTGRES_USER}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
+      
       LOGFLARE_API_KEY: your-super-secret-and-long-logflare-key
       LOGFLARE_URL: http://analytics:4000
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
-    depends_on: [rest]
+    depends_on: [db, rest]
     networks: [${CLIENT}_internal]
 
   kong:

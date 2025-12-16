@@ -8,8 +8,9 @@ Each client gets:
 * isolated **Postgres database**
 * isolated **Auth users**
 * isolated **Storage**
-* a dedicated API endpoint
-  👉 `https://api.<client>.itargs.com`
+* **Supabase Studio dashboard** for web-based management
+* a dedicated API endpoint: `https://api.<client>.itargs.com`
+* a dedicated Studio dashboard: `https://studio.<client>.itargs.com`
 
 This repository includes **automation scripts** to safely create, manage, validate, start, stop, and delete clients.
 
@@ -37,9 +38,10 @@ Ideal for:
 Internet
    |
    |  https://api.client.itargs.com
+   |  https://studio.client.itargs.com
    v
 +--------+
-| Caddy  |  (TLS / routing)
+| Caddy  |  (TLS / automatic routing)
 +--------+
      |
      v
@@ -47,23 +49,28 @@ Internet
 | Client Kong (API) |
 +-------------------+
      |
-     +--> Auth
-     +--> PostgREST
-     +--> Realtime
-     +--> Storage
-     +--> Postgres
+     +-> Auth
+     +-> PostgREST
+     +-> Realtime
+     +-> Storage
+     +-> Studio (Dashboard)
+     +-> Postgres
 ```
 
 * **Caddy**
 
   * Automatic HTTPS (Let’s Encrypt)
-  * Subdomain-based routing
+  * Automatic client routing (no manual config needed)
 * **Kong**
 
   * API gateway per client
 * **Supabase services**
 
   * Fully isolated per client
+  * Studio dashboard for web-based management
+* **Database**
+
+  * Auto-initialized with roles, schemas, and permissions
 
 ---
 
@@ -142,16 +149,22 @@ Validate setup:
 Creates:
 
 * `clients/clientname/`
-* auto-generated secrets
-* Supabase stack
-* Caddy routing
-* reloads Caddy
+* auto-generated URL-safe secrets (JWT, passwords, API keys)
+* Supabase stack with all services
+* Database initialization (roles, schemas, permissions)
+* Caddy routing (automatic)
+* Studio dashboard
 
 **You must add DNS:**
 
 ```
 api.clientname.itargs.com → server IP
+studio.clientname.itargs.com → server IP
 ```
+
+**Access:**
+- API: `https://api.clientname.itargs.com`
+- Dashboard: `https://studio.clientname.itargs.com`
 
 ---
 
@@ -262,6 +275,31 @@ Does not modify anything.
 
 ---
 
+## Features
+
+### Automatic Setup
+- ✅ **URL-safe passwords** - No special characters that break database URLs
+- ✅ **JWT key generation** - ANON_KEY and SERVICE_ROLE_KEY auto-created
+- ✅ **Database initialization** - Roles, schemas, and permissions pre-configured
+- ✅ **Automatic Caddy routing** - Routes added/removed automatically
+
+### Services Included
+- ✅ **PostgreSQL** - Isolated database per client
+- ✅ **GoTrue (Auth)** - User authentication and management
+- ✅ **PostgREST** - Auto-generated REST API
+- ✅ **Realtime** - WebSocket subscriptions
+- ✅ **Storage** - File uploads and management
+- ✅ **Studio Dashboard** - Web UI for managing everything
+- ✅ **Kong Gateway** - API routing and management
+
+### Management
+- ✅ **One-command client creation** - `./tools/create-client.sh name`
+- ✅ **One-command deletion** - `./tools/delete-client.sh name`
+- ✅ **Bulk operations** - `./up.sh` and `./down.sh` for all clients
+- ✅ **Status monitoring** - `./status.sh` shows all services
+
+---
+
 ## Security Notes
 
 * Each client has:
@@ -269,8 +307,9 @@ Does not modify anything.
   * unique `JWT_SECRET`
   * unique `ANON_KEY`
   * unique `SERVICE_ROLE_KEY`
+  * URL-safe passwords (no special characters)
 * Never expose `SERVICE_ROLE_KEY` to frontend apps
-* Supabase Studio is **not exposed publicly**
+* Studio dashboard uses SERVICE_ROLE_KEY (admin access only)
 * Restrict SSH access
 * Use regular backups (recommended daily)
 
