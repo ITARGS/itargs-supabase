@@ -176,13 +176,6 @@ services:
       - name: storage
         paths:
           - /storage/v1
-  - name: studio
-    url: http://studio:3000
-    routes:
-      - name: studio
-        paths:
-          - /
-        strip_path: false
 EOF
 
 cat > "$CLIENT_DIR/docker-compose.yml" <<EOF
@@ -477,8 +470,9 @@ echo ""
 echo "API Endpoint:"
 echo "  https://api.$CLIENT.itargs.com"
 echo ""
-echo "Don't forget to add DNS records:"
+echo "DNS Setup Required:"
 echo "  api.$CLIENT.itargs.com → your server IP"
 echo "  studio.$CLIENT.itargs.com → your server IP"
+
 
 
