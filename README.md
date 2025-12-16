@@ -144,13 +144,6 @@ Validate setup:
 
 ```bash
 ./tools/create-client.sh clientname
-cd clients/clientname
-docker compose up -d
-
-# Wait for database to start, then initialize it
-sleep 10
-cd ../..
-./tools/init-database.sh clientname
 ```
 
 Creates:
@@ -158,9 +151,9 @@ Creates:
 * `clients/clientname/`
 * auto-generated URL-safe secrets (JWT, passwords, API keys)
 * Supabase stack with all services
-* Database initialization (roles, schemas, permissions)
+* **Automatic database initialization** (schemas, roles, permissions)
 * Caddy routing (automatic)
-* Studio dashboard
+* Studio dashboard with credentials
 
 **You must add DNS:**
 
@@ -171,9 +164,9 @@ studio.clientname.itargs.com → server IP
 
 **Access:**
 - API: `https://api.clientname.itargs.com`
-- Dashboard: `https://studio.clientname.itargs.com`
+- Dashboard: `https://studio.clientname.itargs.com` (credentials shown after creation)
 
-**Note:** The `init-database.sh` script ensures all database schemas and roles are created before services try to use them.
+**Note:** Database initialization happens automatically - no manual steps required!
 
 ---
 

@@ -433,7 +433,8 @@ sleep 5
 echo "Initializing database..."
 POSTGRES_PASSWORD=$(grep POSTGRES_PASSWORD .env | cut -d= -f2)
 
-docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<EOF
+# First: Create schemas and roles without password
+docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<'EOF'
 -- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
@@ -444,8 +445,8 @@ ALTER SCHEMA auth OWNER TO postgres;
 ALTER SCHEMA storage OWNER TO postgres;
 ALTER SCHEMA realtime OWNER TO postgres;
 
--- Create roles
-DO \$\$
+-- Create roles (without password-protected ones)
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
     CREATE ROLE anon NOLOGIN NOINHERIT;
@@ -456,25 +457,40 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
   END IF;
+END
+$$;
+
+-- Grant permissions
+GRANT USAGE ON SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
+
+-- Fix schema_migrations table
+ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMP DEFAULT NOW();
+
+-- Set default privileges
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+EOF
+
+# Second: Create supabase_admin with password (needs variable substitution)
+docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<EOF
+DO \$\$
+BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
     CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
   END IF;
 END
 \$\$;
 
--- Grant permissions
-GRANT USAGE ON SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role, supabase_admin;
-GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role, supabase_admin;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role, supabase_admin;
 GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
-
--- Fix schema_migrations table
-ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMP DEFAULT NOW();
-
--- Set default privileges
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, supabase_admin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, supabase_admin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role, supabase_admin;
+GRANT USAGE ON SCHEMA public, auth, storage, realtime TO supabase_admin;
+GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO supabase_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO supabase_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO supabase_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO supabase_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO supabase_admin;
 EOF
 
 echo "Restarting services..."
