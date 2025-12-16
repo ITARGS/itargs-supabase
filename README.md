@@ -144,6 +144,13 @@ Validate setup:
 
 ```bash
 ./tools/create-client.sh clientname
+cd clients/clientname
+docker compose up -d
+
+# Wait for database to start, then initialize it
+sleep 10
+cd ../..
+./tools/init-database.sh clientname
 ```
 
 Creates:
@@ -165,6 +172,8 @@ studio.clientname.itargs.com → server IP
 **Access:**
 - API: `https://api.clientname.itargs.com`
 - Dashboard: `https://studio.clientname.itargs.com`
+
+**Note:** The `init-database.sh` script ensures all database schemas and roles are created before services try to use them.
 
 ---
 
