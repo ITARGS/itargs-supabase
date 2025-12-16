@@ -61,8 +61,8 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 
 JWT_SECRET=$JWT_SECRET
-ANON_KEY=$ANON_KEY
-SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
+ANON_KEY="$ANON_KEY"
+SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
 
 # URLs (required by auth)
 SITE_URL=https://$CLIENT.itargs.com
@@ -73,8 +73,12 @@ URI_ALLOW_LIST=https://$CLIENT.itargs.com,https://api.$CLIENT.itargs.com
 # Realtime
 APP_NAME=supabase-realtime-$CLIENT
 RLIMIT_NOFILE=1048576
-SECRET_KEY_BASE=$SECRET_KEY_BASE
-DB_ENC_KEY=$DB_ENC_KEY
+SECRET_KEY_BASE="$SECRET_KEY_BASE"
+DB_ENC_KEY="$DB_ENC_KEY"
+
+# Studio Dashboard Credentials (for HTTP Basic Auth)
+STUDIO_USER=admin
+STUDIO_PASSWORD=$(openssl rand -hex 16)
 EOF
 
 # Create database initialization script
@@ -396,7 +400,16 @@ CADDY
 fi
 
 echo "✅ Client created: $CLIENT"
-echo "Next:"
-echo "  cd clients/$CLIENT"
-echo "  docker compose up -d"
-
+echo ""
+echo "Studio Dashboard Credentials:"
+echo "  URL: https://studio.$CLIENT.itargs.com"
+echo "  Username: $(grep STUDIO_USER "$CLIENT_DIR/.env" | cut -d= -f2)"
+echo "  Password: $(grep STUDIO_PASSWORD "$CLIENT_DIR/.env" | cut -d= -f2)"
+echo ""
+echo "Next steps:"
+echo "  1. Add DNS records:"
+echo "     api.$CLIENT.itargs.com → your server IP"
+echo "     studio.$CLIENT.itargs.com → your server IP"
+echo "  2. cd clients/$CLIENT"
+echo "  3. docker compose up -d"
+echo "  4. Wait 10 seconds, then run: ../../tools/init-database.sh $CLIENT"

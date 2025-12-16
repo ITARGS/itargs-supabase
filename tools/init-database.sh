@@ -64,10 +64,22 @@ GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
 -- Fix schema_migrations table
 ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMP DEFAULT NOW();
 
+-- Create supabase_admin user for postgres-meta (Studio)
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
+    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
+  END IF;
+END
+\$\$;
+
+-- Grant all privileges to supabase_admin
+GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
+
 -- Set default privileges
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, supabase_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, supabase_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role, supabase_admin;
 EOF
 
 echo "✅ Database initialized successfully"
