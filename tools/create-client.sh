@@ -53,9 +53,13 @@ echo "Generating JWT keys..."
 ANON_KEY="$(gen_jwt anon "$JWT_SECRET")"
 SERVICE_ROLE_KEY="$(gen_jwt service_role "$JWT_SECRET")"
 
+# Generate Studio password
+STUDIO_PASSWORD=$(openssl rand -hex 16)
+
 cat > "$CLIENT_DIR/.env" <<EOF
 CLIENT=$CLIENT
 
+# Database
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
@@ -78,7 +82,7 @@ DB_ENC_KEY="$DB_ENC_KEY"
 
 # Studio Dashboard Credentials (for HTTP Basic Auth)
 STUDIO_USER=admin
-STUDIO_PASSWORD=$(openssl rand -hex 16)
+STUDIO_PASSWORD=$STUDIO_PASSWORD
 EOF
 
 # Create database initialization script
@@ -411,7 +415,19 @@ cd "$CLIENT_DIR"
 docker compose up -d
 
 echo "Waiting for database to be ready..."
-sleep 15
+# Wait for database to be fully ready (increased from 15 to 30 seconds)
+for i in {1..30}; do
+  if docker exec "supabase_${CLIENT}-db-1" pg_isready -U postgres >/dev/null 2>&1; then
+    echo "Database is ready!"
+    break
+  fi
+  sleep 1
+  echo -n "."
+done
+echo ""
+
+# Additional wait to ensure database is fully initialized
+sleep 5
 
 # Run database initialization
 echo "Initializing database..."
