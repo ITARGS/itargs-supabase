@@ -268,12 +268,26 @@ services:
     depends_on: [db]
     networks: [${CLIENT}_internal]
 
+  meta:
+    image: supabase/postgres-meta:v0.68.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: \${POSTGRES_DB}
+      PG_META_DB_USER: \${POSTGRES_USER}
+      PG_META_DB_PASSWORD: \${POSTGRES_PASSWORD}
+    depends_on: [db]
+    networks: [${CLIENT}_internal]
+
   studio:
     image: supabase/studio:latest
     restart: unless-stopped
     env_file: .env
     environment:
-      STUDIO_PG_META_URL: http://rest:3000
+      STUDIO_PG_META_URL: http://meta:8080
       
       SUPABASE_URL: https://api.${CLIENT}.itargs.com
       SUPABASE_PUBLIC_URL: https://api.${CLIENT}.itargs.com
@@ -291,7 +305,7 @@ services:
       LOGFLARE_URL: http://analytics:4000
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
-    depends_on: [db, rest]
+    depends_on: [db, rest, meta]
     networks: [${CLIENT}_internal]
 
   kong:
