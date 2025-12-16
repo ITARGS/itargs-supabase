@@ -325,8 +325,12 @@ CADDYFILE="$CADDY_DIR/Caddyfile"
 if [[ -f "$CADDYFILE" ]]; then
   echo "Adding Caddy routes..."
   
-  # Add route for this client
-  cat >> "$CADDYFILE" <<CADDY
+  # Check if route already exists
+  if grep -q "# Client: $CLIENT" "$CADDYFILE"; then
+    echo "Caddy routes for $CLIENT already exist, skipping..."
+  else
+    # Add route for this client
+    cat >> "$CADDYFILE" <<CADDY
 
 # Client: $CLIENT
 api.$CLIENT.itargs.com {
@@ -338,6 +342,7 @@ studio.$CLIENT.itargs.com {
 }
 
 CADDY
+  fi
   
   # Reload Caddy if running
   if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
