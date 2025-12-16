@@ -269,7 +269,7 @@ services:
     networks: [${CLIENT}_internal]
 
   studio:
-    image: supabase/studio:20241118-5e5586d
+    image: supabase/studio:latest
     restart: unless-stopped
     env_file: .env
     environment:
