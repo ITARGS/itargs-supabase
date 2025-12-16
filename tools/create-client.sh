@@ -105,10 +105,15 @@ GRANT service_role TO postgres;
 -- Note: postgres-meta will use POSTGRES_USER and POSTGRES_PASSWORD from env
 CREATE ROLE IF NOT EXISTS supabase_admin;
 
--- Create schemas
-CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION postgres;
-CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION postgres;
-CREATE SCHEMA IF NOT EXISTS realtime AUTHORIZATION postgres;
+-- Create schemas FIRST (before anything tries to use them)
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS realtime;
+
+-- Set schema owners
+ALTER SCHEMA auth OWNER TO postgres;
+ALTER SCHEMA storage OWNER TO postgres;
+ALTER SCHEMA realtime OWNER TO postgres;
 
 -- Grant schema usage
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
