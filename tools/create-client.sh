@@ -101,6 +101,10 @@ GRANT anon TO postgres;
 GRANT authenticated TO postgres;
 GRANT service_role TO postgres;
 
+-- Create supabase_admin user for postgres-meta
+-- Note: postgres-meta will use POSTGRES_USER and POSTGRES_PASSWORD from env
+CREATE ROLE IF NOT EXISTS supabase_admin;
+
 -- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION postgres;
 CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION postgres;
@@ -343,6 +347,19 @@ if [[ -f "$CADDYFILE" ]]; then
   if grep -q "# Client: $CLIENT" "$CADDYFILE"; then
     echo "Caddy routes for $CLIENT already exist, skipping..."
   else
+    # Generate Studio credentials
+    STUDIO_USER="admin"
+    STUDIO_PASSWORD="$(openssl rand -hex 16)"
+    
+    # Hash password for Caddy Basic Auth
+    STUDIO_PASSWORD_HASH=$(docker run --rm caddy:2.8 caddy hash-password --plaintext "$STUDIO_PASSWORD")
+    
+    # Save credentials to .env
+    echo "" >> "$CLIENT_DIR/.env"
+    echo "# Studio Dashboard Credentials" >> "$CLIENT_DIR/.env"
+    echo "STUDIO_USER=$STUDIO_USER" >> "$CLIENT_DIR/.env"
+    echo "STUDIO_PASSWORD=$STUDIO_PASSWORD" >> "$CLIENT_DIR/.env"
+    
     # Add route for this client
     cat >> "$CADDYFILE" <<CADDY
 
@@ -352,10 +369,17 @@ api.$CLIENT.itargs.com {
 }
 
 studio.$CLIENT.itargs.com {
+  basicauth {
+    $STUDIO_USER $STUDIO_PASSWORD_HASH
+  }
   reverse_proxy ${CLIENT}_kong:8000
 }
 
 CADDY
+    
+    echo "✅ Studio credentials saved to clients/$CLIENT/.env"
+    echo "   Username: $STUDIO_USER"
+    echo "   Password: $STUDIO_PASSWORD"
   fi
   
   # Reload Caddy if running
