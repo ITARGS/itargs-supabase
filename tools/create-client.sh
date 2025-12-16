@@ -312,7 +312,9 @@ services:
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
     depends_on: [db, rest, meta]
-    networks: [${CLIENT}_internal]
+    networks:
+      - ${CLIENT}_internal
+      - edge
 
   kong:
     image: kong:2.8
@@ -400,6 +402,9 @@ echo "  Username: $(grep STUDIO_USER "$CLIENT_DIR/.env" | cut -d= -f2)"
 echo "  Password: $(grep STUDIO_PASSWORD "$CLIENT_DIR/.env" | cut -d= -f2)"
 echo ""
 echo "Starting containers..."
+
+# Ensure edge network exists
+docker network inspect edge >/dev/null 2>&1 || docker network create edge >/dev/null
 
 # Start the containers
 cd "$CLIENT_DIR"
