@@ -163,6 +163,13 @@ services:
       - name: storage
         paths:
           - /storage/v1
+  - name: studio
+    url: http://studio:3000
+    routes:
+      - name: studio
+        paths:
+          - /
+        strip_path: false
 EOF
 
 cat > "$CLIENT_DIR/docker-compose.yml" <<EOF
@@ -261,6 +268,26 @@ services:
     depends_on: [db]
     networks: [${CLIENT}_internal]
 
+  studio:
+    image: supabase/studio:20241118-5e5586d
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      STUDIO_PG_META_URL: http://rest:3000
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
+      
+      SUPABASE_URL: https://api.${CLIENT}.itargs.com
+      SUPABASE_PUBLIC_URL: https://api.${CLIENT}.itargs.com
+      SUPABASE_ANON_KEY: \${ANON_KEY}
+      SUPABASE_SERVICE_KEY: \${SERVICE_ROLE_KEY}
+      
+      LOGFLARE_API_KEY: your-super-secret-and-long-logflare-key
+      LOGFLARE_URL: http://analytics:4000
+      NEXT_PUBLIC_ENABLE_LOGS: "true"
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+    depends_on: [rest]
+    networks: [${CLIENT}_internal]
+
   kong:
     image: kong:2.8
     container_name: ${CLIENT}_kong
@@ -297,6 +324,10 @@ if [[ -f "$CADDYFILE" ]]; then
 
 # Client: $CLIENT
 api.$CLIENT.itargs.com {
+  reverse_proxy ${CLIENT}_kong:8000
+}
+
+studio.$CLIENT.itargs.com {
   reverse_proxy ${CLIENT}_kong:8000
 }
 
