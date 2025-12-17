@@ -457,49 +457,29 @@ POSTGRES_PASSWORD=$(grep POSTGRES_PASSWORD .env | cut -d= -f2)
 
 # First: Create schemas and roles without password
 echo "  - Creating schemas (auth, storage, realtime)..."
-if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<'EOF'
+if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
 BEGIN;
-
--- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE SCHEMA IF NOT EXISTS realtime;
-
--- Set owners
 ALTER SCHEMA auth OWNER TO postgres;
 ALTER SCHEMA storage OWNER TO postgres;
 ALTER SCHEMA realtime OWNER TO postgres;
-
--- Create roles (without password-protected ones)
-DO $$
+DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN NOINHERIT;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN NOINHERIT;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
-  END IF;
-END
-$$;
-
--- Grant permissions
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN NOINHERIT; END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN NOINHERIT; END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS; END IF;
+END \$\$;
 GRANT USAGE ON SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
-
--- Fix schema_migrations table
 ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMP DEFAULT NOW();
-
--- Set default privileges
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
-
 COMMIT;
-EOF
+"
 then
   echo "❌ ERROR: Failed to create database schemas!"
   echo "Please check database logs: docker logs supabase_${CLIENT}-db-1"
