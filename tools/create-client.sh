@@ -481,14 +481,14 @@ CREATE TABLE IF NOT EXISTS public.schema_migrations (
   inserted_at TIMESTAMP(0) DEFAULT NOW()
 );
 -- If table exists but missing column (e.g. created by older migration)
-DO $$
+DO \$\$
 BEGIN
   BEGIN
     ALTER TABLE public.schema_migrations ADD COLUMN inserted_at TIMESTAMP(0) DEFAULT NOW();
   EXCEPTION
     WHEN duplicate_column THEN RAISE NOTICE 'column inserted_at already exists in schema_migrations.';
   END;
-END $$;
+END \$\$;
 -- Realtime needs permission to write to this table if it uses a non-superuser
 GRANT ALL ON TABLE public.schema_migrations TO postgres, service_role;
 
