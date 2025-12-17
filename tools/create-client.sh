@@ -23,12 +23,18 @@ if [[ -d "$CLIENT_DIR" ]]; then
   exit 1
 fi
 
+echo "📁 Creating client directory structure..."
 mkdir -p "$CLIENT_DIR/data/db" "$CLIENT_DIR/data/storage"
+echo "  ✓ Directories created"
 
+echo "🔐 Generating secure credentials..."
 POSTGRES_PASSWORD="$(openssl rand -hex 32 | tr -d '\n')"
 JWT_SECRET="$(openssl rand -hex 32 | tr -d '\n')"
 SECRET_KEY_BASE="$(openssl rand -hex 48 | tr -d '\n')"
 DB_ENC_KEY="$(openssl rand -hex 16 | tr -d '\n')"
+echo "  ✓ Database password generated"
+echo "  ✓ JWT secret generated"
+echo "  ✓ Encryption keys generated"
 
 # Generate JWT tokens for API access
 gen_jwt() {
@@ -49,12 +55,16 @@ gen_jwt() {
   "
 }
 
-echo "Generating JWT keys..."
+echo "🔑 Generating JWT API keys..."
 ANON_KEY="$(gen_jwt anon "$JWT_SECRET")"
+echo "  ✓ Anon key generated"
 SERVICE_ROLE_KEY="$(gen_jwt service_role "$JWT_SECRET")"
+echo "  ✓ Service role key generated"
 
 # Generate Studio password
+echo "🎨 Generating Studio credentials..."
 STUDIO_PASSWORD=$(openssl rand -hex 16)
+echo "  ✓ Studio password generated"
 
 cat > "$CLIENT_DIR/.env" <<EOF
 CLIENT=$CLIENT
@@ -84,6 +94,8 @@ DB_ENC_KEY="$DB_ENC_KEY"
 STUDIO_USER=admin
 STUDIO_PASSWORD=$STUDIO_PASSWORD
 EOF
+
+echo "  ✓ Environment file created"
 
 # Create database initialization script
 cat > "$CLIENT_DIR/init.sql" <<'INITSQL'
@@ -408,11 +420,19 @@ echo ""
 echo "Starting containers..."
 
 # Ensure edge network exists
-docker network inspect edge >/dev/null 2>&1 || docker network create edge >/dev/null
+echo "🌐 Checking edge network..."
+if docker network inspect edge >/dev/null 2>&1; then
+  echo "  ✓ Edge network already exists"
+else
+  docker network create edge >/dev/null
+  echo "  ✓ Edge network created"
+fi
 
 # Start the containers
+echo "🚀 Starting Docker containers..."
 cd "$CLIENT_DIR"
 docker compose up -d
+echo "  ✓ Containers started"
 
 echo "Waiting for database to be ready..."
 # Wait for database to be fully ready (increased from 15 to 30 seconds)
@@ -428,6 +448,10 @@ echo ""
 
 # Additional wait to ensure database is fully initialized
 sleep 5
+
+# Stop auth and realtime to prevent race condition during schema creation
+echo "Stopping auth and realtime services temporarily..."
+docker compose stop auth realtime
 
 # Run database initialization
 echo "Initializing database..."
@@ -506,8 +530,9 @@ then
 fi
 echo "  ✓ Database roles and permissions configured"
 
-echo "Restarting services..."
+echo "🔄 Restarting all services..."
 docker compose restart
+echo "  ✓ All services restarted"
 
 echo ""
 echo "✅ Client is ready!"
