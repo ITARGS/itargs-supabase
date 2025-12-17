@@ -471,11 +471,11 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS; END IF;
 END \$\$;
 GRANT USAGE ON SCHEMA public, auth, realtime TO anon, authenticated, service_role;
-GRANT ALL ON SCHEMA storage TO postgres, service_role, supabase_admin;
+GRANT ALL ON SCHEMA storage TO postgres, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, realtime TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres, service_role, supabase_admin;
+GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, realtime TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres, service_role, supabase_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 
 -- Force fix for Realtime: Ensure schema_migrations exists with correct columns
