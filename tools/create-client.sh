@@ -325,7 +325,7 @@ services:
       
       LOGFLARE_API_KEY: your-super-secret-and-long-logflare-key
       LOGFLARE_URL: http://analytics:4000
-      NEXT_PUBLIC_ENABLE_LOGS: "true"
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
     depends_on: [db, rest, meta]
     networks:
@@ -392,7 +392,7 @@ studio.$CLIENT.itargs.com {
   basicauth {
     $STUDIO_USER $STUDIO_PASSWORD_HASH
   }
-  reverse_proxy ${CLIENT}_kong:8000
+  reverse_proxy supabase_${CLIENT}-studio-1:3000
 }
 
 CADDY
@@ -489,15 +489,13 @@ echo "  ✓ Schemas created successfully"
 
 # Second: Create supabase_admin with password (needs variable substitution)
 echo "  - Creating supabase_admin role..."
-if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<EOF
+if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
     CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
   END IF;
-END
-\$\$;
-
+END \$\$;
 GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
 GRANT USAGE ON SCHEMA public, auth, storage, realtime TO supabase_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO supabase_admin;
@@ -505,7 +503,7 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO supabase
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO supabase_admin;
-EOF
+"
 then
   echo "❌ ERROR: Failed to create supabase_admin role!"
   exit 1
