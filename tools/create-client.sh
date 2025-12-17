@@ -156,11 +156,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
--- Create schema_migrations table with inserted_at column for Realtime compatibility
-CREATE TABLE IF NOT EXISTS public.schema_migrations (
-  version TEXT PRIMARY KEY,
-  inserted_at TIMESTAMP DEFAULT NOW()
-);
 
 INITSQL
 
@@ -473,7 +468,6 @@ END \$\$;
 GRANT USAGE ON SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
-ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMESTAMP DEFAULT NOW();
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
