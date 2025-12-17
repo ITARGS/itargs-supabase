@@ -323,6 +323,9 @@ services:
       POSTGRES_USER: \${POSTGRES_USER}
       POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
       
+      # Make Studio listen on all network interfaces
+      HOSTNAME: 0.0.0.0
+      
       LOGFLARE_API_KEY: your-super-secret-and-long-logflare-key
       LOGFLARE_URL: http://analytics:4000
       NEXT_PUBLIC_ENABLE_LOGS: "false"
@@ -410,11 +413,6 @@ fi
 
 echo "✅ Client created: $CLIENT"
 echo ""
-echo "Studio Dashboard Credentials:"
-echo "  URL: https://studio.$CLIENT.itargs.com"
-echo "  Username: $(grep STUDIO_USER "$CLIENT_DIR/.env" | cut -d= -f2)"
-echo "  Password: $(grep STUDIO_PASSWORD "$CLIENT_DIR/.env" | cut -d= -f2)"
-echo ""
 echo "Starting containers..."
 
 # Ensure edge network exists
@@ -496,13 +494,26 @@ BEGIN
     CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
   END IF;
 END \$\$;
+
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+
 GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
-GRANT USAGE ON SCHEMA public, auth, storage, realtime TO supabase_admin;
+
+-- Explicitly grant CREATE and USAGE on schemas
+GRANT ALL ON SCHEMA public, auth, storage, realtime TO supabase_admin;
+
+-- Grant permissions on all existing objects
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO supabase_admin;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO supabase_admin;
+
+-- Set default privileges for new objects
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO supabase_admin;
+
+-- Ensure supabase_admin can manage the public schema
+ALTER SCHEMA public OWNER TO supabase_admin;
 "
 then
   echo "❌ ERROR: Failed to create supabase_admin role!"
