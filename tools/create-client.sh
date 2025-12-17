@@ -434,7 +434,8 @@ echo "Initializing database..."
 POSTGRES_PASSWORD=$(grep POSTGRES_PASSWORD .env | cut -d= -f2)
 
 # First: Create schemas and roles without password
-docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<'EOF'
+echo "  - Creating schemas (auth, storage, realtime)..."
+if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<'EOF'
 -- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
@@ -473,9 +474,16 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authentic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
 EOF
+then
+  echo "❌ ERROR: Failed to create database schemas!"
+  echo "Please check database logs: docker logs supabase_${CLIENT}-db-1"
+  exit 1
+fi
+echo "  ✓ Schemas created successfully"
 
 # Second: Create supabase_admin with password (needs variable substitution)
-docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<EOF
+echo "  - Creating supabase_admin role..."
+if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<EOF
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
@@ -492,6 +500,11 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO supabase_admin;
 EOF
+then
+  echo "❌ ERROR: Failed to create supabase_admin role!"
+  exit 1
+fi
+echo "  ✓ Database roles and permissions configured"
 
 echo "Restarting services..."
 docker compose restart
