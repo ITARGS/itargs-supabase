@@ -154,6 +154,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authen
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 -- Create schema_migrations table with inserted_at column for Realtime compatibility
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
@@ -495,7 +496,7 @@ BEGIN
   END IF;
 END \$\$;
 
--- Enable extensions
+-- Ensure extensions are enabled (best effort)
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
