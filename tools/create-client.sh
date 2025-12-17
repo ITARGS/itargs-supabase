@@ -473,6 +473,25 @@ END \$\$;
 GRANT USAGE ON SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public, auth, storage, realtime TO anon, authenticated, service_role;
+
+-- Force fix for Realtime: Ensure schema_migrations exists with correct columns
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  version BIGINT PRIMARY KEY,
+  inserted_at TIMESTAMP(0) DEFAULT NOW()
+);
+-- If table exists but missing column (e.g. created by older migration)
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.schema_migrations ADD COLUMN inserted_at TIMESTAMP(0) DEFAULT NOW();
+  EXCEPTION
+    WHEN duplicate_column THEN RAISE NOTICE 'column inserted_at already exists in schema_migrations.';
+  END;
+END $$;
+-- Realtime needs permission to write to this table if it uses a non-superuser
+GRANT ALL ON TABLE public.schema_migrations TO postgres, service_role;
+
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
