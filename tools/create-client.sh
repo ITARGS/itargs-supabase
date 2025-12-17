@@ -156,6 +156,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
+-- Create schema_migrations table for Realtime (fixes crash)
+CREATE TABLE IF NOT EXISTS public.schema_migrations (
+  version BIGINT PRIMARY KEY,
+  inserted_at TIMESTAMP(0) DEFAULT NOW()
+);
 
 INITSQL
 
