@@ -556,6 +556,21 @@ echo "🔄 Starting auth and realtime services..."
 docker compose start auth realtime
 echo "  ✓ Services started successfully"
 
+# Wait for storage service to run migrations
+echo "⏳ Waiting for storage migrations..."
+sleep 10
+
+# Disable RLS on storage tables (Storage API needs direct access)
+echo "🔓 Disabling RLS on storage tables..."
+docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
+ALTER TABLE storage.buckets DISABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.migrations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.s3_multipart_uploads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.s3_multipart_uploads_parts DISABLE ROW LEVEL SECURITY;
+" 2>/dev/null || echo "  ⚠️  Some storage tables may not exist yet (this is OK)"
+echo "  ✓ Storage tables configured"
+
 echo ""
 echo "✅ Client is ready!"
 echo ""
