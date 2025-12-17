@@ -397,9 +397,7 @@ studio.$CLIENT.itargs.com {
 
 CADDY
     
-    echo "✅ Studio credentials saved to clients/$CLIENT/.env"
-    echo "   Username: $STUDIO_USER"
-    echo "   Password: $STUDIO_PASSWORD"
+    echo "✅ Caddy routes configured for $CLIENT"
   fi
   
   # Reload Caddy if running
@@ -460,6 +458,8 @@ POSTGRES_PASSWORD=$(grep POSTGRES_PASSWORD .env | cut -d= -f2)
 # First: Create schemas and roles without password
 echo "  - Creating schemas (auth, storage, realtime)..."
 if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres <<'EOF'
+BEGIN;
+
 -- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
@@ -497,6 +497,8 @@ ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS inserted_at TIMEST
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+
+COMMIT;
 EOF
 then
   echo "❌ ERROR: Failed to create database schemas!"
@@ -530,9 +532,9 @@ then
 fi
 echo "  ✓ Database roles and permissions configured"
 
-echo "🔄 Restarting all services..."
-docker compose restart
-echo "  ✓ All services restarted"
+echo "🔄 Starting auth and realtime services..."
+docker compose start auth realtime
+echo "  ✓ Services started successfully"
 
 echo ""
 echo "✅ Client is ready!"
