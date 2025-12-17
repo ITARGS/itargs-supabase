@@ -496,9 +496,6 @@ BEGIN
   END IF;
 END \$\$;
 
--- Ensure extensions are enabled (best effort)
-CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
-
 GRANT ALL PRIVILEGES ON DATABASE postgres TO supabase_admin;
 
 -- Explicitly grant CREATE and USAGE on schemas
