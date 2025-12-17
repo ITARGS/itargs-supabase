@@ -491,6 +491,13 @@ BEGIN
   EXCEPTION
     WHEN duplicate_column THEN RAISE NOTICE 'column inserted_at already exists in schema_migrations.';
   END;
+  
+  -- Force version to be BIGINT (Realtime expects integer, but migration create might default to text)
+  BEGIN
+    ALTER TABLE public.schema_migrations ALTER COLUMN version TYPE BIGINT USING version::BIGINT;
+  EXCEPTION
+    WHEN OTHERS THEN RAISE NOTICE 'Could not alter version column: %', SQLERRM;
+  END;
 END \$\$;
 -- Realtime needs permission to write to this table if it uses a non-superuser
 GRANT ALL ON TABLE public.schema_migrations TO postgres, service_role;
