@@ -520,7 +520,9 @@ if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
-    CREATE ROLE supabase_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
+    CREATE ROLE supabase_admin LOGIN SUPERUSER CREATEROLE CREATEDB REPLICATION BYPASSRLS PASSWORD '$POSTGRES_PASSWORD';
+  ELSE
+    ALTER ROLE supabase_admin WITH SUPERUSER;
   END IF;
 END \$\$;
 
@@ -538,8 +540,11 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO supabase_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO supabase_admin;
 
--- Ensure supabase_admin can manage the public schema
+-- Ensure supabase_admin can manage all schemas
 ALTER SCHEMA public OWNER TO supabase_admin;
+ALTER SCHEMA auth OWNER TO supabase_admin;
+ALTER SCHEMA storage OWNER TO supabase_admin;
+ALTER SCHEMA realtime OWNER TO supabase_admin;
 "
 then
   echo "❌ ERROR: Failed to create supabase_admin role!"
