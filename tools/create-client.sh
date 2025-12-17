@@ -222,7 +222,7 @@ services:
       GOTRUE_URI_ALLOW_LIST: \${URI_ALLOW_LIST}
 
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}?sslmode=disable
+      GOTRUE_DB_DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}?sslmode=disable&search_path=auth
 
       GOTRUE_JWT_SECRET: \${JWT_SECRET}
       GOTRUE_JWT_AUD: authenticated
