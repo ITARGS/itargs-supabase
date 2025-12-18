@@ -168,6 +168,40 @@ cat > "$CLIENT_DIR/kong.yml" <<'EOF'
 _format_version: "2.1"
 _transform: true
 
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Encoding
+        - Authorization
+        - Content-Type
+        - apikey
+        - x-client-info
+        - x-supabase-api-version
+        - accept-profile
+        - content-profile
+        - prefer
+        - range
+        - x-upsert
+        - cache-control
+        - x-requested-with
+      exposed_headers:
+        - X-Total-Count
+        - Content-Range
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
 services:
   - name: rest
     url: http://rest:3000
