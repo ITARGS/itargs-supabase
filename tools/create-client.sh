@@ -294,7 +294,7 @@ services:
     networks: [${CLIENT}_internal]
 
   storage:
-    image: supabase/storage-api:v1.11.13
+    image: supabase/storage-api:v1.14.0
     restart: unless-stopped
     env_file: .env
     environment:
