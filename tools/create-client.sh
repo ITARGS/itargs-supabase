@@ -183,6 +183,7 @@ plugins:
         - PATCH
         - DELETE
         - OPTIONS
+        - HEAD
       headers:
         - Accept
         - Accept-Encoding
@@ -200,6 +201,7 @@ plugins:
         - upload-length
         - upload-metadata
         - upload-offset
+        - upload-defer-length
         - x-source
         - cache-control
         - x-requested-with
@@ -207,6 +209,8 @@ plugins:
         - X-Total-Count
         - Content-Range
         - Location
+        - Upload-Offset
+        - Upload-Length
       credentials: true
       max_age: 3600
       preflight_continue: false
