@@ -193,11 +193,17 @@ plugins:
         - prefer
         - range
         - x-upsert
+        - tus-resumable
+        - upload-length
+        - upload-metadata
+        - upload-offset
+        - x-source
         - cache-control
         - x-requested-with
       exposed_headers:
         - X-Total-Count
         - Content-Range
+        - Location
       credentials: true
       max_age: 3600
       preflight_continue: false
