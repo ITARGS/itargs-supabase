@@ -61,10 +61,11 @@ echo "  ✓ Anon key generated"
 SERVICE_ROLE_KEY="$(gen_jwt service_role "$JWT_SECRET")"
 echo "  ✓ Service role key generated"
 
-# Generate Studio password
-echo "🎨 Generating Studio credentials..."
-STUDIO_PASSWORD=$(openssl rand -hex 16)
-echo "  ✓ Studio password generated"
+# Generate shared admin credentials (for both Studio and React app)
+echo "🎨 Generating admin credentials..."
+ADMIN_EMAIL="admin@${CLIENT}.itargs.com"
+ADMIN_PASSWORD=$(openssl rand -base64 12 | tr -d '/+=' | head -c 16)
+echo "  ✓ Admin credentials generated"
 
 cat > "$CLIENT_DIR/.env" <<EOF
 CLIENT=$CLIENT
@@ -90,9 +91,11 @@ RLIMIT_NOFILE=1048576
 SECRET_KEY_BASE="$SECRET_KEY_BASE"
 DB_ENC_KEY="$DB_ENC_KEY"
 
-# Studio Dashboard Credentials (for HTTP Basic Auth)
+# Shared Admin Credentials (for Studio Basic Auth and React App Login)
+ADMIN_EMAIL=$ADMIN_EMAIL
+ADMIN_PASSWORD=$ADMIN_PASSWORD
 STUDIO_USER=admin
-STUDIO_PASSWORD=$STUDIO_PASSWORD
+STUDIO_PASSWORD=$ADMIN_PASSWORD
 EOF
 
 echo "  ✓ Environment file created"
@@ -664,8 +667,7 @@ echo ""
 
 # Create default admin user
 echo "👤 Creating default admin user..."
-ADMIN_EMAIL="admin@${CLIENT}.itargs.com"
-ADMIN_PASSWORD="Admin123!"
+# ADMIN_EMAIL and ADMIN_PASSWORD are already set at the top of the script
 
 # Wait for auth service to be ready
 sleep 5
@@ -702,19 +704,17 @@ else
   echo "  ⚠️  Could not create admin user via API (you can create manually)"
 fi
 
-# Add admin credentials to .env
-echo "" >> .env
-echo "# Default Admin User" >> .env
-echo "ADMIN_EMAIL=${ADMIN_EMAIL}" >> .env
-echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> .env
-
+echo ""
+echo "🔐 Shared Admin Credentials (for both Studio and React App):"
+echo "  Email: ${ADMIN_EMAIL}"
+echo "  Password: ${ADMIN_PASSWORD}"
 echo ""
 echo "Studio Dashboard:"
 echo "  URL: https://studio.$CLIENT.itargs.com"
-echo "  Username: $(grep STUDIO_USER .env | cut -d= -f2)"
-echo "  Password: $(grep STUDIO_PASSWORD .env | cut -d= -f2)"
+echo "  Username: admin"
+echo "  Password: ${ADMIN_PASSWORD}"
 echo ""
-echo "Admin User (for React app):"
+echo "React App Admin:"
 echo "  Email: ${ADMIN_EMAIL}"
 echo "  Password: ${ADMIN_PASSWORD}"
 echo ""
