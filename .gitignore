@@ -33,3 +33,4 @@ dashboard-api/dist/
 # Client data
 clients/*/data/
 clients/*/.env
+ecommerce_website_reactjs/
