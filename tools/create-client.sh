@@ -307,6 +307,8 @@ services:
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: ${CLIENT}
+      GLOBAL_S3_PROTOCOL: https
+      STORAGE_API_EXTERNAL_URL: https://api.${CLIENT}.itargs.com/storage/v1
     volumes:
       - ./data/storage:/var/lib/storage
     depends_on: [db, rest]
