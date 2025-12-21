@@ -585,6 +585,28 @@ ALTER SCHEMA public OWNER TO supabase_admin;
 ALTER SCHEMA auth OWNER TO supabase_admin;
 ALTER SCHEMA storage OWNER TO supabase_admin;
 ALTER SCHEMA realtime OWNER TO supabase_admin;
+
+-- Grant full permissions on auth schema for Studio user management
+GRANT ALL ON SCHEMA auth TO postgres, supabase_admin, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres, supabase_admin, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres, supabase_admin, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA auth TO postgres, supabase_admin, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO postgres, supabase_admin, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO postgres, supabase_admin, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON FUNCTIONS TO postgres, supabase_admin, service_role;
+GRANT USAGE ON SCHEMA auth TO authenticated, anon;
+GRANT SELECT ON auth.users TO authenticated;
+
+-- Create supabase_migrations schema for Studio migrations UI
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+  version TEXT PRIMARY KEY,
+  statements TEXT[],
+  name TEXT,
+  inserted_at TIMESTAMPTZ DEFAULT NOW()
+);
+GRANT USAGE ON SCHEMA supabase_migrations TO postgres, supabase_admin;
+GRANT ALL ON ALL TABLES IN SCHEMA supabase_migrations TO postgres, supabase_admin;
 "
 then
   echo "❌ ERROR: Failed to create supabase_admin role!"
