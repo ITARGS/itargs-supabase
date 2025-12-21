@@ -661,10 +661,62 @@ echo "  ✓ Storage tables configured"
 echo ""
 echo "✅ Client is ready!"
 echo ""
+
+# Create default admin user
+echo "👤 Creating default admin user..."
+ADMIN_EMAIL="admin@${CLIENT}.itargs.com"
+ADMIN_PASSWORD="Admin123!"
+
+# Wait for auth service to be ready
+sleep 5
+
+# Create admin user via GoTrue API
+ADMIN_RESPONSE=$(curl -s -X POST "http://localhost:9999/admin/users" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(grep SERVICE_ROLE_KEY .env | cut -d= -f2)" \
+  -d "{
+    \"email\": \"${ADMIN_EMAIL}\",
+    \"password\": \"${ADMIN_PASSWORD}\",
+    \"email_confirm\": true,
+    \"role\": \"authenticated\"
+  }" 2>/dev/null) || true
+
+# Get admin user ID
+ADMIN_USER_ID=$(echo "$ADMIN_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [ -n "$ADMIN_USER_ID" ]; then
+  # Create profile and admin role
+  docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
+  -- Create profile
+  INSERT INTO public.profiles (id, email, full_name)
+  VALUES ('${ADMIN_USER_ID}', '${ADMIN_EMAIL}', 'Admin User')
+  ON CONFLICT (id) DO NOTHING;
+  
+  -- Assign admin role
+  INSERT INTO public.user_roles (user_id, role)
+  VALUES ('${ADMIN_USER_ID}', 'admin')
+  ON CONFLICT (user_id, role) DO NOTHING;
+  " 2>/dev/null || true
+  echo "  ✓ Admin user created"
+else
+  echo "  ⚠️  Could not create admin user via API (you can create manually)"
+fi
+
+# Add admin credentials to .env
+echo "" >> .env
+echo "# Default Admin User" >> .env
+echo "ADMIN_EMAIL=${ADMIN_EMAIL}" >> .env
+echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> .env
+
+echo ""
 echo "Studio Dashboard:"
 echo "  URL: https://studio.$CLIENT.itargs.com"
 echo "  Username: $(grep STUDIO_USER .env | cut -d= -f2)"
 echo "  Password: $(grep STUDIO_PASSWORD .env | cut -d= -f2)"
+echo ""
+echo "Admin User (for React app):"
+echo "  Email: ${ADMIN_EMAIL}"
+echo "  Password: ${ADMIN_PASSWORD}"
 echo ""
 echo "API Endpoint:"
 echo "  https://api.$CLIENT.itargs.com"
@@ -672,6 +724,3 @@ echo ""
 echo "DNS Setup Required:"
 echo "  api.$CLIENT.itargs.com → your server IP"
 echo "  studio.$CLIENT.itargs.com → your server IP"
-
-
-
