@@ -607,6 +607,31 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
 );
 GRANT USAGE ON SCHEMA supabase_migrations TO postgres, supabase_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA supabase_migrations TO postgres, supabase_admin;
+
+-- Full Studio permissions for storage schema
+GRANT ALL ON SCHEMA storage TO postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA storage TO postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA storage GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA storage GRANT ALL ON SEQUENCES TO postgres;
+
+-- Full Studio permissions for public schema
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres;
+
+-- Full Studio permissions for realtime schema
+GRANT ALL ON SCHEMA realtime TO postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA realtime TO postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA realtime TO postgres;
+
+-- Extensions schema for Studio
+CREATE SCHEMA IF NOT EXISTS extensions;
+GRANT ALL ON SCHEMA extensions TO postgres;
 "
 then
   echo "❌ ERROR: Failed to create supabase_admin role!"
