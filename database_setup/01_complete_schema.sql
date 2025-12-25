@@ -292,6 +292,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
     sku TEXT,
     price_adjustment DECIMAL(10,2) DEFAULT 0,
     stock_quantity INTEGER DEFAULT 0,
+    image_url TEXT,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
