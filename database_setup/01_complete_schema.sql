@@ -263,19 +263,39 @@ CREATE TABLE IF NOT EXISTS site_analytics (
 
 -- Cart Items Table
 CREATE TABLE IF NOT EXISTS cart_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     session_id TEXT,
     product_id UUID REFERENCES products(id) ON DELETE CASCADE,
     bundle_id UUID REFERENCES bundles(id) ON DELETE CASCADE,
+    variant_id UUID,
     quantity INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT cart_items_user_or_session CHECK (user_id IS NOT NULL OR session_id IS NOT NULL),
     CONSTRAINT cart_items_product_or_bundle CHECK (
         (product_id IS NOT NULL AND bundle_id IS NULL) OR
         (product_id IS NULL AND bundle_id IS NOT NULL)
     )
 );
+
+-- Product Variants Table
+CREATE TABLE IF NOT EXISTS product_variants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sku TEXT,
+    price_adjustment DECIMAL(10,2) DEFAULT 0,
+    stock_quantity INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add foreign key from cart_items to product_variants
+ALTER TABLE cart_items
+ADD CONSTRAINT cart_items_variant_id_fkey
+FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL;
 
 -- Wishlists Table
 CREATE TABLE IF NOT EXISTS wishlists (
@@ -334,6 +354,9 @@ CREATE INDEX IF NOT EXISTS idx_analytics_created ON site_analytics(created_at DE
 CREATE INDEX IF NOT EXISTS idx_cart_items_user ON cart_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_session ON cart_items(session_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
+
+-- Product Variants
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
 
 -- Wishlists
 CREATE INDEX IF NOT EXISTS idx_wishlists_user ON wishlists(user_id);
