@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS bundles (
     sale_price DECIMAL(10,2),
     image_url TEXT,
     is_active BOOLEAN DEFAULT true,
+    display_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
