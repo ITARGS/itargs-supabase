@@ -604,7 +604,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO postgres, supabas
 ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO postgres, supabase_admin, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON FUNCTIONS TO postgres, supabase_admin, service_role;
 GRANT USAGE ON SCHEMA auth TO authenticated, anon;
-GRANT SELECT ON auth.users TO authenticated;
 
 -- Create supabase_migrations schema for Studio migrations UI
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
