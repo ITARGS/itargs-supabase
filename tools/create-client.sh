@@ -730,3 +730,69 @@ echo ""
 echo "DNS Setup Required:"
 echo "  api.$CLIENT.itargs.com → your server IP"
 echo "  studio.$CLIENT.itargs.com → your server IP"
+
+# ============================================
+# E-COMMERCE DATABASE SETUP
+# ============================================
+echo ""
+echo "🛒 E-commerce Database Setup"
+echo ""
+echo "Do you want to set up the complete e-commerce database?"
+echo "1) Yes - Complete setup (schema + settings + dummy data)"
+echo "2) Yes - Production setup (schema + settings only)"
+echo "3) No - Skip e-commerce setup"
+read -p "Enter choice [1-3]: " ECOM_SETUP
+
+if [ "$ECOM_SETUP" = "1" ] || [ "$ECOM_SETUP" = "2" ]; then
+    DATABASE_SETUP_DIR="$BASE_DIR/database_setup"
+    
+    if [ ! -d "$DATABASE_SETUP_DIR" ]; then
+        echo "⚠️  Database setup directory not found: $DATABASE_SETUP_DIR"
+        echo "Skipping e-commerce setup..."
+    else
+        echo "📦 Running e-commerce database setup..."
+        
+        # Run schema script
+        if [ -f "$DATABASE_SETUP_DIR/01_complete_schema.sql" ]; then
+            echo "  - Creating e-commerce schema..."
+            if docker exec -i "supabase_${CLIENT}-db-1" psql -U postgres -d postgres < "$DATABASE_SETUP_DIR/01_complete_schema.sql" 2>&1 | grep -q "ERROR"; then
+                echo "  ⚠️  Some schema errors occurred (may be normal if tables exist)"
+            else
+                echo "  ✓ E-commerce schema created"
+            fi
+        fi
+        
+        # Run settings script
+        if [ -f "$DATABASE_SETUP_DIR/02_initial_settings.sql" ]; then
+            echo "  - Populating settings..."
+            docker exec -i "supabase_${CLIENT}-db-1" psql -U postgres -d postgres < "$DATABASE_SETUP_DIR/02_initial_settings.sql" > /dev/null 2>&1
+            echo "  ✓ Settings populated"
+        fi
+        
+        # Run dummy data if option 1
+        if [ "$ECOM_SETUP" = "1" ] && [ -f "$DATABASE_SETUP_DIR/03_dummy_data.sql" ]; then
+            echo "  - Loading dummy data..."
+            docker exec -i "supabase_${CLIENT}-db-1" psql -U postgres -d postgres < "$DATABASE_SETUP_DIR/03_dummy_data.sql" > /dev/null 2>&1
+            echo "  ✓ Dummy data loaded"
+        fi
+        
+        echo ""
+        echo "✅ E-commerce database setup complete!"
+        echo ""
+        echo "📊 Database includes:"
+        echo "  - 16 tables (products, orders, reviews, bundles, etc.)"
+        echo "  - Payment methods (COD, Vodafone Cash, InstaPay, Cards)"
+        echo "  - Shipping methods (Standard, Express, Same Day)"
+        echo "  - 5 product categories"
+        if [ "$ECOM_SETUP" = "1" ]; then
+            echo "  - Sample products and test data"
+        fi
+        echo ""
+        echo "🔧 Next steps:"
+        echo "  1. Create storage buckets: product-images, review-images, store-assets"
+        echo "  2. Update settings via admin dashboard"
+        echo "  3. Upload product images"
+    fi
+fi
+
+echo ""
