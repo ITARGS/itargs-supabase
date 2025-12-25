@@ -673,6 +673,17 @@ ALTER TABLE storage.s3_multipart_uploads_parts DISABLE ROW LEVEL SECURITY;
 " 2>/dev/null || echo "  ⚠️  Some storage tables may not exist yet (this is OK)"
 echo "  ✓ Storage tables configured"
 
+# Create views in public schema for storage tables (fixes knex.js search_path issue)
+echo "  - Creating storage views in public schema..."
+docker exec "supabase_${CLIENT}-db-1" psql -U postgres << 'EOSQL'
+-- Create views to allow storage service to access storage schema tables
+CREATE OR REPLACE VIEW public.objects AS SELECT * FROM storage.objects;
+CREATE OR REPLACE VIEW public.buckets AS SELECT * FROM storage.buckets;
+GRANT ALL ON public.objects TO postgres;
+GRANT ALL ON public.buckets TO postgres;
+EOSQL
+echo "  ✓ Storage views created"
+
 echo ""
 echo "✅ Client is ready!"
 echo ""
