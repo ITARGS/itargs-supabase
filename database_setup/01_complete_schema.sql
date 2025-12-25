@@ -311,6 +311,22 @@ CREATE TABLE IF NOT EXISTS wishlists (
     UNIQUE(user_id, product_id)
 );
 
+-- Age Ranges Table (for filters)
+CREATE TABLE IF NOT EXISTS age_ranges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Subjects Table (for filters)
+CREATE TABLE IF NOT EXISTS subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================
 -- 3. INDEXES
 -- ============================================
