@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT,
     description_ar TEXT,
     base_price DECIMAL(10,2) NOT NULL,
+    price DECIMAL(10,2),
     sale_price DECIMAL(10,2),
     cost_price DECIMAL(10,2),
     sku TEXT UNIQUE,
