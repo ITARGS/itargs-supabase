@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS bundles (
     base_price DECIMAL(10,2) NOT NULL,
     bundle_price DECIMAL(10,2),
     sale_price DECIMAL(10,2),
+    savings_percentage DECIMAL(5,2) DEFAULT 0,
     image_url TEXT,
     is_active BOOLEAN DEFAULT true,
     display_order INTEGER DEFAULT 0,
