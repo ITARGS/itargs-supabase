@@ -397,6 +397,8 @@ CREATE POLICY "Addresses are manageable by owner" ON addresses FOR ALL TO authen
 CREATE POLICY "Orders are viewable by owner" ON orders FOR SELECT TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Orders are insertable by authenticated users" ON orders FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Orders are manageable by authenticated users" ON orders FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins can view all orders" ON orders FOR ALL TO authenticated USING (public.is_admin_safe());
+
 
 -- Order Items Policies
 CREATE POLICY "Order items are viewable by order owner" ON order_items FOR SELECT TO authenticated USING (
@@ -443,10 +445,13 @@ CREATE POLICY "Authenticated users can view analytics" ON site_analytics FOR SEL
 CREATE POLICY "Users can view their own cart items" ON cart_items FOR SELECT TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own cart items" ON cart_items FOR ALL TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Anonymous users can manage cart by session" ON cart_items FOR ALL TO anon USING (session_id IS NOT NULL);
+CREATE POLICY "Admins can view all cart items" ON cart_items FOR SELECT TO authenticated USING (public.is_admin_safe());
 
 -- Wishlists Policies
 CREATE POLICY "Users can view their own wishlist" ON wishlists FOR SELECT TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own wishlist" ON wishlists FOR ALL TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Admins can view all wishlists" ON wishlists FOR SELECT TO authenticated USING (public.is_admin_safe());
+
 
 -- ============================================
 -- 5. STORAGE BUCKETS
