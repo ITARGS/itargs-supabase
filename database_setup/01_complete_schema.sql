@@ -266,6 +266,20 @@ CREATE TABLE IF NOT EXISTS site_analytics (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- FAQs Table
+CREATE TABLE IF NOT EXISTS faqs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    question_ar TEXT,
+    answer TEXT NOT NULL,
+    answer_ar TEXT,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Cart Items Table
 CREATE TABLE IF NOT EXISTS cart_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
