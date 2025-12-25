@@ -702,13 +702,24 @@ if [ -n "$ADMIN_USER_ID" ] && [ "$ADMIN_USER_ID" != "null" ]; then
   WHERE id = '${ADMIN_USER_ID}';
   " 2>/dev/null || true
   
-  # Create profile with admin role
-  echo "  - Assigning admin role..."
+  # Create profile with admin role (critical for is_admin_safe function)
+  echo "  - Creating admin profile..."
   docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
   INSERT INTO public.profiles (id, full_name, role)
   VALUES ('${ADMIN_USER_ID}', 'Admin User', 'admin')
   ON CONFLICT (id) DO UPDATE SET role = 'admin';
   " 2>/dev/null || true
+  
+  # Verify profile was created
+  PROFILE_CHECK=$(docker exec "supabase_${CLIENT}-db-1" psql -U postgres -t -c "
+  SELECT role FROM public.profiles WHERE id = '${ADMIN_USER_ID}';
+  " 2>/dev/null | tr -d ' \n')
+  
+  if [ "$PROFILE_CHECK" != "admin" ]; then
+    echo "  ⚠️  Warning: Admin profile may not have been created correctly"
+    echo "  Run this manually if needed:"
+    echo "  INSERT INTO public.profiles (id, full_name, role) SELECT id, 'Admin User', 'admin' FROM auth.users WHERE email = '${ADMIN_EMAIL}';"
+  fi
   
   # Restart REST service to reload schema cache (for is_admin_safe function)
   echo "  - Reloading API schema cache..."
