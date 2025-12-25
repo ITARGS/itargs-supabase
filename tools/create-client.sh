@@ -677,36 +677,35 @@ echo "👤 Creating default admin user..."
 # Wait for auth service to be ready
 sleep 5
 
-# Create admin user via GoTrue API
-ADMIN_RESPONSE=$(curl -s -X POST "http://localhost:9999/admin/users" \
+# Get the anon key for signup
+ANON_KEY=$(grep ANON_KEY .env | cut -d= -f2 | tr -d '"')
+
+# Create admin user via public signup endpoint
+echo "  - Creating user account..."
+ADMIN_RESPONSE=$(curl -s -X POST "https://api.${CLIENT}.itargs.com/auth/v1/signup" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $(grep SERVICE_ROLE_KEY .env | cut -d= -f2)" \
+  -H "apikey: ${ANON_KEY}" \
   -d "{
     \"email\": \"${ADMIN_EMAIL}\",
-    \"password\": \"${ADMIN_PASSWORD}\",
-    \"email_confirm\": true,
-    \"role\": \"authenticated\"
+    \"password\": \"${ADMIN_PASSWORD}\"
   }" 2>/dev/null) || true
 
-# Get admin user ID
+# Extract user ID from response
 ADMIN_USER_ID=$(echo "$ADMIN_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
-if [ -n "$ADMIN_USER_ID" ]; then
-  # Create profile and admin role
+if [ -n "$ADMIN_USER_ID" ] && [ "$ADMIN_USER_ID" != "null" ]; then
+  # Create profile with admin role
+  echo "  - Assigning admin role..."
   docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
-  -- Create profile
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES ('${ADMIN_USER_ID}', '${ADMIN_EMAIL}', 'Admin User')
-  ON CONFLICT (id) DO NOTHING;
-  
-  -- Assign admin role
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES ('${ADMIN_USER_ID}', 'admin')
-  ON CONFLICT (user_id, role) DO NOTHING;
+  INSERT INTO public.profiles (id, full_name, role)
+  VALUES ('${ADMIN_USER_ID}', 'Admin User', 'admin')
+  ON CONFLICT (id) DO UPDATE SET role = 'admin';
   " 2>/dev/null || true
-  echo "  ✓ Admin user created"
+  echo "  ✓ Admin user created successfully"
 else
-  echo "  ⚠️  Could not create admin user via API (you can create manually)"
+  echo "  ⚠️  Could not create admin user automatically"
+  echo "  You can create it manually by signing up and running:"
+  echo "  UPDATE public.profiles SET role = 'admin' WHERE id = '<user_id>';"
 fi
 
 echo ""
