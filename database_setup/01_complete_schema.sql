@@ -226,8 +226,8 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Settings Table
-CREATE TABLE IF NOT EXISTS settings (
+-- Site Settings Table
+CREATE TABLE IF NOT EXISTS site_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     key TEXT UNIQUE NOT NULL,
     value TEXT,
@@ -248,13 +248,42 @@ CREATE TABLE IF NOT EXISTS newsletter_subscribers (
 -- Site Analytics Table
 CREATE TABLE IF NOT EXISTS site_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    event_type TEXT NOT NULL,
+    event_type TEXT DEFAULT 'page_view',
     event_data JSONB,
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     session_id TEXT,
     ip_address TEXT,
     user_agent TEXT,
+    page_path TEXT,
+    referrer TEXT,
+    country TEXT,
+    device_type TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Cart Items Table
+CREATE TABLE IF NOT EXISTS cart_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    session_id TEXT,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    bundle_id UUID REFERENCES bundles(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT cart_items_product_or_bundle CHECK (
+        (product_id IS NOT NULL AND bundle_id IS NULL) OR
+        (product_id IS NULL AND bundle_id IS NOT NULL)
+    )
+);
+
+-- Wishlists Table
+CREATE TABLE IF NOT EXISTS wishlists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, product_id)
 );
 
 -- ============================================
@@ -301,6 +330,15 @@ CREATE INDEX IF NOT EXISTS idx_newsletter_email ON newsletter_subscribers(email)
 CREATE INDEX IF NOT EXISTS idx_analytics_event_type ON site_analytics(event_type);
 CREATE INDEX IF NOT EXISTS idx_analytics_created ON site_analytics(created_at DESC);
 
+-- Cart Items
+CREATE INDEX IF NOT EXISTS idx_cart_items_user ON cart_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_session ON cart_items(session_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
+
+-- Wishlists
+CREATE INDEX IF NOT EXISTS idx_wishlists_user ON wishlists(user_id);
+CREATE INDEX IF NOT EXISTS idx_wishlists_product ON wishlists(product_id);
+
 -- ============================================
 -- 4. ROW LEVEL SECURITY (RLS)
 -- ============================================
@@ -323,6 +361,8 @@ ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wishlists ENABLE ROW LEVEL SECURITY;
 
 -- Categories Policies
 CREATE POLICY "Categories are viewable by everyone" ON categories FOR SELECT TO anon, authenticated USING (is_active = true);
@@ -387,8 +427,8 @@ CREATE POLICY "Active payment methods are viewable by everyone" ON payment_metho
 CREATE POLICY "Payment methods are manageable by authenticated users" ON payment_methods FOR ALL TO authenticated USING (true);
 
 -- Settings Policies
-CREATE POLICY "Settings are viewable by everyone" ON settings FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Settings are manageable by authenticated users" ON settings FOR ALL TO authenticated USING (true);
+CREATE POLICY "Settings are viewable by everyone" ON site_settings FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Settings are manageable by authenticated users" ON site_settings FOR ALL TO authenticated USING (true);
 
 -- Newsletter Subscribers Policies
 CREATE POLICY "Anyone can subscribe to newsletter" ON newsletter_subscribers FOR INSERT TO anon, authenticated WITH CHECK (true);
@@ -398,6 +438,15 @@ CREATE POLICY "Authenticated users can manage subscribers" ON newsletter_subscri
 -- Site Analytics Policies
 CREATE POLICY "Anyone can insert analytics" ON site_analytics FOR INSERT TO anon, authenticated WITH CHECK (true);
 CREATE POLICY "Authenticated users can view analytics" ON site_analytics FOR SELECT TO authenticated USING (true);
+
+-- Cart Items Policies
+CREATE POLICY "Users can view their own cart items" ON cart_items FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own cart items" ON cart_items FOR ALL TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Anonymous users can manage cart by session" ON cart_items FOR ALL TO anon USING (session_id IS NOT NULL);
+
+-- Wishlists Policies
+CREATE POLICY "Users can view their own wishlist" ON wishlists FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own wishlist" ON wishlists FOR ALL TO authenticated USING (auth.uid() = user_id);
 
 -- ============================================
 -- 5. STORAGE BUCKETS
@@ -452,8 +501,27 @@ CREATE TRIGGER update_shipping_methods_updated_at BEFORE UPDATE ON shipping_meth
 CREATE TRIGGER update_payment_methods_updated_at BEFORE UPDATE ON payment_methods
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
+CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON site_settings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Admin check function
+CREATE OR REPLACE FUNCTION public.is_admin_safe()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE id = auth.uid()
+    AND role = 'admin'
+  );
+$$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.is_admin_safe() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin_safe() TO anon;
 
 -- ============================================
 -- SETUP COMPLETE
