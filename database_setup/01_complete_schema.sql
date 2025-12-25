@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS orders (
     shipping_cost DECIMAL(10,2) DEFAULT 0,
     discount_amount DECIMAL(10,2) DEFAULT 0,
     total DECIMAL(10,2) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     shipping_address_id UUID REFERENCES addresses(id) ON DELETE SET NULL,
     notes TEXT,
     tracking_number TEXT,
