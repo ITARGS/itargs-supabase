@@ -694,6 +694,14 @@ ADMIN_RESPONSE=$(curl -s -X POST "https://api.${CLIENT}.itargs.com/auth/v1/signu
 ADMIN_USER_ID=$(echo "$ADMIN_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [ -n "$ADMIN_USER_ID" ] && [ "$ADMIN_USER_ID" != "null" ]; then
+  # Set authenticated role in auth.users (required for login)
+  echo "  - Setting user role..."
+  docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
+  UPDATE auth.users 
+  SET role = 'authenticated' 
+  WHERE id = '${ADMIN_USER_ID}';
+  " 2>/dev/null || true
+  
   # Create profile with admin role
   echo "  - Assigning admin role..."
   docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
@@ -701,10 +709,17 @@ if [ -n "$ADMIN_USER_ID" ] && [ "$ADMIN_USER_ID" != "null" ]; then
   VALUES ('${ADMIN_USER_ID}', 'Admin User', 'admin')
   ON CONFLICT (id) DO UPDATE SET role = 'admin';
   " 2>/dev/null || true
+  
+  # Restart REST service to reload schema cache (for is_admin_safe function)
+  echo "  - Reloading API schema cache..."
+  docker restart "supabase_${CLIENT}-rest-1" >/dev/null 2>&1 || true
+  sleep 2
+  
   echo "  ✓ Admin user created successfully"
 else
   echo "  ⚠️  Could not create admin user automatically"
   echo "  You can create it manually by signing up and running:"
+  echo "  UPDATE auth.users SET role = 'authenticated' WHERE email = '<email>';"
   echo "  UPDATE public.profiles SET role = 'admin' WHERE id = '<user_id>';"
 fi
 
