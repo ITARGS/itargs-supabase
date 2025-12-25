@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS products (
     slug TEXT UNIQUE NOT NULL,
     description TEXT,
     description_ar TEXT,
-    price DECIMAL(10,2) NOT NULL,
+    base_price DECIMAL(10,2) NOT NULL,
     sale_price DECIMAL(10,2),
     cost_price DECIMAL(10,2),
     sku TEXT UNIQUE,
