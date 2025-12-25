@@ -329,6 +329,24 @@ CREATE TABLE IF NOT EXISTS subjects (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Product Age Ranges Junction Table
+CREATE TABLE IF NOT EXISTS product_age_ranges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+    age_range_id UUID REFERENCES age_ranges(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(product_id, age_range_id)
+);
+
+-- Product Subjects Junction Table
+CREATE TABLE IF NOT EXISTS product_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(product_id, subject_id)
+);
+
 -- ============================================
 -- 3. INDEXES
 -- ============================================
