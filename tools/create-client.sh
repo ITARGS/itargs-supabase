@@ -563,6 +563,13 @@ then
 fi
 echo "  ✓ Schemas created successfully"
 
+# Run complete schema setup if available
+if [ -f "$(dirname "$0")/../database_setup/01_complete_schema.sql" ]; then
+  echo "  - Loading complete e-commerce schema..."
+  docker exec -i "supabase_${CLIENT}-db-1" psql -U postgres < "$(dirname "$0")/../database_setup/01_complete_schema.sql" > /dev/null 2>&1 || true
+  echo "  ✓ Complete schema loaded"
+fi
+
 # Second: Create supabase_admin with password (needs variable substitution)
 echo "  - Creating supabase_admin role..."
 if ! docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
