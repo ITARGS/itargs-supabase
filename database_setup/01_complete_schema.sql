@@ -316,6 +316,7 @@ CREATE TABLE IF NOT EXISTS age_ranges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
     display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -324,6 +325,7 @@ CREATE TABLE IF NOT EXISTS subjects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
     display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
