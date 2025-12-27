@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     description_ar TEXT,
     type TEXT NOT NULL,
     is_active BOOLEAN DEFAULT true,
+    is_enabled BOOLEAN DEFAULT true,
     display_order INTEGER DEFAULT 0,
     config JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
