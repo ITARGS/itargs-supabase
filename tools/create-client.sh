@@ -713,18 +713,63 @@ ADMIN_RESPONSE=$(curl -s -X POST "https://api.${CLIENT}.itargs.com/auth/v1/signu
     \"password\": \"${ADMIN_PASSWORD}\"
   }" 2>/dev/null) || true
 
-# Extract user ID from response
-ADMIN_USER_ID=$(echo "$ADMIN_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+# Create admin user with all required fields
+ADMIN_USER_ID=$(docker exec "supabase_${CLIENT}-db-1" psql -U postgres -t -c "
+-- Enable pgcrypto extension for password hashing
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-if [ -n "$ADMIN_USER_ID" ] && [ "$ADMIN_USER_ID" != "null" ]; then
-  # Set authenticated role in auth.users (required for login)
-  echo "  - Setting user role..."
-  docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
-  UPDATE auth.users 
-  SET role = 'authenticated' 
-  WHERE id = '${ADMIN_USER_ID}';
-  " 2>/dev/null || true
-  
+-- Create admin user with all fields properly set
+INSERT INTO auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    confirmation_sent_at,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change,
+    phone_change,
+    email_change_token_current,
+    phone_change_token,
+    reauthentication_token,
+    raw_app_meta_data,
+    raw_user_meta_data
+) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    gen_random_uuid(),
+    'authenticated',
+    'authenticated',
+    '$ADMIN_EMAIL',
+    crypt('$ADMIN_PASSWORD', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    NOW(),
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '{}'::jsonb,
+    '{}'::jsonb
+) ON CONFLICT (email) DO UPDATE SET
+    encrypted_password = crypt('$ADMIN_PASSWORD', gen_salt('bf')),
+    updated_at = NOW()
+RETURNING id;
+")
+
+ADMIN_USER_ID=$(echo "$ADMIN_USER_ID" | tr -d '[:space:]') # Trim whitespace
+
+if [ -n "$ADMIN_USER_ID" ]; then
   # Create profile with admin role (critical for is_admin_safe function)
   echo "  - Creating admin profile..."
   docker exec "supabase_${CLIENT}-db-1" psql -U postgres -c "
