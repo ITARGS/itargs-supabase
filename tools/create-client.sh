@@ -442,24 +442,29 @@ api.$CLIENT.itargs.com {
 }
 
 studio.$CLIENT.itargs.com {
-  basicauth {
+  basic_auth {
     $STUDIO_USER $STUDIO_PASSWORD_HASH
   }
   reverse_proxy supabase_${CLIENT}-studio-1:3000
 }
-
 CADDY
     
     echo "✅ Caddy routes configured for $CLIENT"
-  fi
-  
-  # Reload Caddy if running
-  if docker ps --format '{{.Names}}' | grep -qx 'caddy'; then
+    
+    # Reload Caddy to apply new routes
     echo "Reloading Caddy..."
     docker exec caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || \
     (cd "$CADDY_DIR" && docker compose restart) || true
   fi
+else
+  echo "⚠️  Caddy not configured - Caddyfile not found at $CADDYFILE"
 fi
+
+# Connect containers to edge network for Caddy reverse proxy
+echo "🌐 Connecting containers to edge network..."
+docker network connect edge ${CLIENT}_kong 2>/dev/null || echo "  ℹ️  Kong already connected to edge network"
+docker network connect edge supabase_${CLIENT}-studio-1 2>/dev/null || echo "  ℹ️  Studio already connected to edge network"
+echo "✅ Containers connected to edge network"
 
 echo "✅ Client created: $CLIENT"
 echo ""
