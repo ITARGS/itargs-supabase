@@ -33,7 +33,6 @@ dashboard-api/dist/
 # Client data
 clients/*/data/
 clients/*/.env
-ecommerce_website_reactjs/
 
 # One-time migration scripts
 add_admin_translations.sh
