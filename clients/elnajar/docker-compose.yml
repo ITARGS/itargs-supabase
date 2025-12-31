@@ -1,0 +1,166 @@
+name: supabase_elnajar
+
+services:
+  db:
+    image: supabase/postgres:15.1.0.147
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks: [elnajar_internal]
+
+  auth:
+    image: supabase/gotrue:v2.151.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+
+      SITE_URL: ${SITE_URL}
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL}
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+      GOTRUE_URI_ALLOW_LIST: ${URI_ALLOW_LIST}
+
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&search_path=auth
+
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_EXP: 3600
+
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMS_AUTOCONFIRM: "true"
+      GOTRUE_DISABLE_SIGNUP: "false"
+    depends_on: [db]
+    networks: [elnajar_internal]
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+    depends_on: [db]
+    networks: [elnajar_internal]
+
+  storage:
+    image: supabase/storage-api:v1.14.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?search_path=storage
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: elnajar
+      GLOBAL_S3_PROTOCOL: https
+      STORAGE_API_EXTERNAL_URL: https://api.elnajar.itargs.com/storage/v1
+    volumes:
+      - ./data/storage:/var/lib/storage
+    depends_on: [db, rest]
+    networks: [elnajar_internal]
+
+  realtime:
+    image: supabase/realtime:v2.32.5
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 4000
+      APP_NAME: ${APP_NAME}
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      DB_ENC_KEY: ${DB_ENC_KEY}
+
+      # FIX: avoid conflict with public.schema_migrations
+      DB_MIGRATIONS_TABLE: realtime_schema_migrations
+      ECTO_MIGRATIONS_TABLE: realtime_schema_migrations
+
+      RLIMIT_NOFILE: ${RLIMIT_NOFILE}
+    depends_on: [db]
+    networks: [elnajar_internal]
+
+  meta:
+    image: supabase/postgres-meta:v0.68.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB}
+      PG_META_DB_USER: ${POSTGRES_USER}
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on: [db]
+    networks: [elnajar_internal]
+
+  studio:
+    image: supabase/studio:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      
+      SUPABASE_URL: https://api.elnajar.itargs.com
+      SUPABASE_PUBLIC_URL: https://api.elnajar.itargs.com
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      
+      # Direct database connection for Studio
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      
+      # Make Studio listen on all network interfaces
+      HOSTNAME: 0.0.0.0
+      
+      LOGFLARE_API_KEY: your-super-secret-and-long-logflare-key
+      LOGFLARE_URL: http://analytics:4000
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+    depends_on: [db, rest, meta]
+    networks:
+      - elnajar_internal
+      - edge
+
+  kong:
+    image: kong:2.8
+    container_name: elnajar_kong
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    volumes:
+      - ./kong.yml:/kong/kong.yml:ro
+    depends_on: [auth, rest, realtime, storage]
+    networks:
+      - elnajar_internal
+      - edge
+
+networks:
+  elnajar_internal:
+    driver: bridge
+  edge:
+    external: true
+    name: edge

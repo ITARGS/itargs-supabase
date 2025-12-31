@@ -1,0 +1,72 @@
+_format_version: "2.1"
+_transform: true
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+        - HEAD
+      headers:
+        - Accept
+        - Accept-Encoding
+        - Authorization
+        - Content-Type
+        - apikey
+        - x-client-info
+        - x-supabase-api-version
+        - accept-profile
+        - content-profile
+        - prefer
+        - range
+        - x-upsert
+        - tus-resumable
+        - upload-length
+        - upload-metadata
+        - upload-offset
+        - upload-defer-length
+        - x-source
+        - cache-control
+        - x-requested-with
+      exposed_headers:
+        - X-Total-Count
+        - Content-Range
+        - Location
+        - Upload-Offset
+        - Upload-Length
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
+services:
+  - name: rest
+    url: http://rest:3000
+    routes:
+      - name: rest
+        paths:
+          - /rest/v1
+  - name: auth
+    url: http://auth:9999
+    routes:
+      - name: auth
+        paths:
+          - /auth/v1
+  - name: realtime
+    url: http://realtime:4000
+    routes:
+      - name: realtime
+        paths:
+          - /realtime/v1
+  - name: storage
+    url: http://storage:5000
+    routes:
+      - name: storage
+        paths:
+          - /storage/v1

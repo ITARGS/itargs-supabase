@@ -1,0 +1,2 @@
+-- Paste your entire SQL migration here
+-- (The SQL you showed me)
