@@ -34,6 +34,10 @@ cd /root/itargs-supabase
 # Apply master sync fix
 docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/master_sync_fix.sql
 
+# Apply use_cases table migration
+echo "📊 Creating use_cases table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_use_cases.sql
+
 echo "✅ Database schema updated successfully"
 ENDSSH
 
@@ -54,7 +58,9 @@ echo ""
 echo "📋 What was deployed:"
 echo "  ✅ Latest code from elnajar-brand-identity branch"
 echo "  ✅ Database schema fixes (master_sync_fix.sql)"
+echo "  ✅ Use cases filter table (add_use_cases.sql)"
 echo "  ✅ Cart localization support (name_ar, name_en)"
+echo "  ✅ Dynamic filter system (Performance Tiers, Workload Types, Categories, Use Cases)"
 echo ""
 echo "🔗 Access your site:"
 echo "  Frontend: https://elnajar.itargs.com"
