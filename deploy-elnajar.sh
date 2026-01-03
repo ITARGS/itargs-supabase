@@ -38,6 +38,10 @@ docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/master_sy
 echo "📊 Creating use_cases table..."
 docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_use_cases.sql
 
+# Add use_case column to products table
+echo "🔧 Adding use_case column to products..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_products_use_case_column.sql
+
 echo "✅ Database schema updated successfully"
 ENDSSH
 
