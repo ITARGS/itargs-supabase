@@ -42,6 +42,30 @@ docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_use_c
 echo "🔧 Adding use_case column to products..."
 docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_products_use_case_column.sql
 
+# Create hero_sections table
+echo "🎨 Creating hero_sections table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_hero_sections.sql
+
+# Create trust_badges table
+echo "⚖️  Creating trust_badges table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_trust_badges.sql
+
+# Create about_content table
+echo "📖 Creating about_content table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_about_content.sql
+
+# Create footer_links and social_links tables
+echo "🔗 Creating footer and social links tables..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_footer_links.sql
+
+# Create nav_links table
+echo "🧭 Creating nav_links table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_nav_links.sql
+
+# Create working_hours table
+echo "🕒 Creating working_hours table..."
+docker exec -i supabase_elnajar-db-1 psql -U postgres < database_setup/add_working_hours.sql
+
 echo "✅ Database schema updated successfully"
 ENDSSH
 
