@@ -41,3 +41,6 @@ translate_settings.sh
 translate_settings_complete.sh
 update_admin_currency.sh
 *.backup
+
+# Ecommerce
+ecommerce_website_reactjs
